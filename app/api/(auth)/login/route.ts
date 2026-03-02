@@ -50,14 +50,13 @@ export async function POST(req: Request) {
       },
     });
 
-    console.log("Login successful, setting cookie with token:", token);
     // ✅ Set httpOnly cookie
     response.cookies.set("token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax", // change to "strict" if no cross-site usage
       path: "/",
-      maxAge: 60 * 60 * 24, // 1 day
+      maxAge: 60 * 60 * 24, // 24 hour
     });
 
     return response;

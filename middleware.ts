@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 // import { ratelimit } from '@/app/lib/ratelimit';
-import { headers } from "next/headers";
 
 // 1. Explicitly define which routes NEED a login
 const protectedRoutes = ["/dashboard", "/deals", "/leads", "/documents"];
@@ -33,7 +32,6 @@ export async function middleware(req: NextRequest) {
 
   // 2. AUTHENTICATION LOGIC
   const token = req.cookies.get("token")?.value;
-  console.log("Middleware - Token:", token);
   const isProtectedRoute = protectedRoutes.some((route) =>
     pathname.startsWith(route),
   );

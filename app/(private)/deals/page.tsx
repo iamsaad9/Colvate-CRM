@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import {
   Card,
   CardBody,
@@ -32,6 +32,7 @@ import {
   Progress,
   Tabs,
   Tab,
+  Skeleton,
 } from "@heroui/react";
 import {
   Search,
@@ -55,46 +56,20 @@ import {
   Building2,
   ArrowRight,
   Target,
+  RefreshCcw,
+  Handshake,
 } from "lucide-react";
+import { useUser } from "@/app/context/UserContext";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useAllUser } from "@/app/hooks/useAllUsers";
+import { useAllDeals } from "@/app/hooks/useAllsDeals";
+import { Deal, DealStage } from "@/app/types/types";
 
-// Types
-type DealStage = "PROSPECT" | "NEGOTIATION" | "WON" | "LOST";
-
-interface Deal {
-  id: string;
-  title: string;
-  customer: {
-    id: string;
-    name: string;
-    company?: string;
-  };
-  value: number;
-  stage: DealStage;
-  expectedCloseDate?: string;
-  probability: number;
-  assignedTo?: {
-    id: string;
-    name: string;
-    avatar?: string;
-  };
-  createdAt: string;
-  updatedAt: string;
-  notes?: string;
-  tags?: string[];
-}
-
-interface DealsPageProps {
-  companyId: string;
-  userId: string;
-  userRole: "ADMIN" | "MANAGER" | "SALES" | "SUPPORT";
-}
-
-export default function DealsPage({
-  companyId,
-  userId,
-  userRole,
-}: DealsPageProps) {
-  const [viewMode, setViewMode] = useState<"table" | "pipeline">("pipeline");
+export default function DealsPage() {
+  const currentUser = useUser();
+  const isAdmin =
+    currentUser?.role === "ADMIN" || currentUser?.role === "MANAGER";
+  const router = useRouter();
   const [searchValue, setSearchValue] = useState("");
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set([]));
   const [page, setPage] = useState(1);
@@ -104,8 +79,18 @@ export default function DealsPage({
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const valueRef = useRef<HTMLInputElement>(null);
+  const notesRef = useRef<HTMLTextAreaElement>(null);
+  const {
+    data: allDeals = [],
+    isLoading: dealsLoading,
+    refetch: refetchDeals,
+  } = useAllDeals(currentUser?.companyId || "");
+  const { data: allUsers = [], isLoading: allUserLoading } = useAllUser(
+    currentUser?.companyId || "",
+  );
 
-  // Filters
   const [stageFilter, setStageFilter] = useState<Set<string>>(new Set(["all"]));
   const [assignedFilter, setAssignedFilter] = useState<Set<string>>(
     new Set(["all"]),
@@ -116,100 +101,12 @@ export default function DealsPage({
   const [formData, setFormData] = useState({
     title: "",
     customerId: "",
+    serviceId: "",
     value: "",
     stage: "PROSPECT" as DealStage,
     expectedCloseDate: "",
-    probability: "25",
     assignedTo: "",
-    notes: "",
   });
-
-  // Mock data
-  const mockDeals: Deal[] = [
-    {
-      id: "1",
-      title: "Enterprise License Deal",
-      customer: { id: "1", name: "Acme Corporation", company: "Acme Corp" },
-      value: 150000,
-      stage: "NEGOTIATION",
-      expectedCloseDate: "2024-07-15",
-      probability: 75,
-      assignedTo: { id: "1", name: "John Doe" },
-      createdAt: "2024-05-10T10:30:00",
-      updatedAt: "2024-06-12T14:20:00",
-      tags: ["Enterprise", "High Priority"],
-    },
-    {
-      id: "2",
-      title: "Annual Subscription",
-      customer: { id: "2", name: "TechStart Inc", company: "TechStart" },
-      value: 45000,
-      stage: "PROSPECT",
-      expectedCloseDate: "2024-08-01",
-      probability: 25,
-      assignedTo: { id: "2", name: "Jane Smith" },
-      createdAt: "2024-06-01T09:15:00",
-      updatedAt: "2024-06-10T11:30:00",
-      tags: ["Startup"],
-    },
-    {
-      id: "3",
-      title: "Professional Services Contract",
-      customer: { id: "3", name: "Global Solutions Ltd" },
-      value: 200000,
-      stage: "WON",
-      expectedCloseDate: "2024-06-10",
-      probability: 100,
-      assignedTo: { id: "1", name: "John Doe" },
-      createdAt: "2024-04-15T08:00:00",
-      updatedAt: "2024-06-10T16:45:00",
-      tags: ["Enterprise", "Closed"],
-    },
-    {
-      id: "4",
-      title: "Cloud Migration Project",
-      customer: { id: "4", name: "Small Business Co" },
-      value: 30000,
-      stage: "LOST",
-      expectedCloseDate: "2024-06-05",
-      probability: 0,
-      assignedTo: { id: "2", name: "Jane Smith" },
-      createdAt: "2024-05-01T10:00:00",
-      updatedAt: "2024-06-05T12:00:00",
-      tags: ["SMB"],
-    },
-    {
-      id: "5",
-      title: "Software Integration",
-      customer: { id: "5", name: "Enterprise Corp" },
-      value: 85000,
-      stage: "NEGOTIATION",
-      expectedCloseDate: "2024-07-20",
-      probability: 60,
-      assignedTo: { id: "1", name: "John Doe" },
-      createdAt: "2024-05-20T14:30:00",
-      updatedAt: "2024-06-11T09:15:00",
-    },
-    // Add more mock data
-    ...Array.from({ length: 15 }, (_, i) => ({
-      id: `${i + 6}`,
-      title: `Deal ${i + 6}`,
-      customer: { id: `${i + 6}`, name: `Customer ${i + 6}` },
-      value: Math.floor(Math.random() * 200000) + 10000,
-      stage: ["PROSPECT", "NEGOTIATION", "WON", "LOST"][i % 4] as DealStage,
-      expectedCloseDate: new Date(Date.now() + (i + 1) * 86400000 * 30)
-        .toISOString()
-        .split("T")[0],
-      probability: [25, 50, 75, 100][i % 4],
-      assignedTo: {
-        id: `${(i % 2) + 1}`,
-        name: i % 2 === 0 ? "John Doe" : "Jane Smith",
-      },
-      createdAt: new Date(Date.now() - (i + 1) * 86400000).toISOString(),
-      updatedAt: new Date().toISOString(),
-      tags: ["Tag1"],
-    })),
-  ];
 
   const teamMembers = [
     { id: "1", name: "John Doe" },
@@ -225,9 +122,14 @@ export default function DealsPage({
     { id: "5", name: "Enterprise Corp" },
   ];
 
+  useEffect(() => {
+    console.log("Fetched Deals: ", allDeals);
+    refetchDeals();
+  }, [allDeals.length, refetchDeals, allDeals]);
+
   // Filtered data
   const filteredDeals = useMemo(() => {
-    let filtered = [...mockDeals];
+    let filtered = [...allDeals];
 
     if (searchValue) {
       filtered = filtered.filter(
@@ -258,7 +160,7 @@ export default function DealsPage({
     }
 
     return filtered;
-  }, [mockDeals, searchValue, stageFilter, assignedFilter, valueFilter]);
+  }, [allDeals, searchValue, stageFilter, assignedFilter, valueFilter]);
 
   const pages = Math.ceil(filteredDeals.length / rowsPerPage);
   const paginatedDeals = useMemo(() => {
@@ -266,18 +168,6 @@ export default function DealsPage({
     const end = start + rowsPerPage;
     return filteredDeals.slice(start, end);
   }, [filteredDeals, page, rowsPerPage]);
-
-  // Pipeline view data
-  const pipelineData = useMemo(() => {
-    const stages: DealStage[] = ["PROSPECT", "NEGOTIATION", "WON", "LOST"];
-    return stages.map((stage) => ({
-      stage,
-      deals: filteredDeals.filter((deal) => deal.stage === stage),
-      totalValue: filteredDeals
-        .filter((deal) => deal.stage === stage)
-        .reduce((sum, deal) => sum + deal.value, 0),
-    }));
-  }, [filteredDeals]);
 
   const getStageColor = (stage: DealStage) => {
     const colors = {
@@ -307,10 +197,38 @@ export default function DealsPage({
     });
   };
 
-  const handleAddDeal = () => {
-    console.log("Adding deal:", formData);
-    setIsAddModalOpen(false);
-    resetForm();
+  const handleAddDeal = async () => {
+    const dealPayload = {
+      ...formData,
+      title: titleRef.current?.value || "",
+      notes: notesRef.current?.value || "",
+      value: valueRef.current?.value || "",
+      companyId: currentUser?.companyId,
+    };
+
+    if (!dealPayload.title) return; // Simple validation
+
+    try {
+      const response = await fetch("/api/deals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dealPayload),
+      });
+
+      if (response.ok) {
+        const savedDeal = await response.json();
+
+        setIsAddModalOpen(false);
+        resetForm();
+
+        console.log("Deal saved successfully:", savedDeal);
+      } else {
+        const errorData = await response.json();
+        alert(`Error: ${errorData.error}`);
+      }
+    } catch (err) {
+      console.error("Network error:", err);
+    }
   };
 
   const handleEditDeal = () => {
@@ -329,12 +247,11 @@ export default function DealsPage({
     setFormData({
       title: "",
       customerId: "",
+      serviceId: "",
       value: "",
       stage: "PROSPECT",
       expectedCloseDate: "",
-      probability: "25",
       assignedTo: "",
-      notes: "",
     });
   };
 
@@ -342,13 +259,12 @@ export default function DealsPage({
     setSelectedDeal(deal);
     setFormData({
       title: deal.title,
-      customerId: deal.customer.id,
+      customerId: deal.customerId,
+      serviceId: deal.serviceId,
       value: deal.value.toString(),
       stage: deal.stage,
       expectedCloseDate: deal.expectedCloseDate || "",
-      probability: deal.probability.toString(),
-      assignedTo: deal.assignedTo?.id || "",
-      notes: deal.notes || "",
+      assignedTo: deal.assignedTo || "",
     });
     setIsEditModalOpen(true);
   };
@@ -367,49 +283,104 @@ export default function DealsPage({
     return count;
   }, [stageFilter, assignedFilter, valueFilter]);
 
-  // Calculate stats
   const stats = useMemo(() => {
-    const totalValue = filteredDeals.reduce((sum, deal) => sum + deal.value, 0);
-    const wonValue = filteredDeals
-      .filter((d) => d.stage === "WON")
-      .reduce((sum, deal) => sum + deal.value, 0);
-    const avgDealSize =
-      filteredDeals.length > 0 ? totalValue / filteredDeals.length : 0;
-    const winRate =
-      filteredDeals.filter((d) => d.stage === "WON" || d.stage === "LOST")
-        .length > 0
-        ? (filteredDeals.filter((d) => d.stage === "WON").length /
-            filteredDeals.filter((d) => d.stage === "WON" || d.stage === "LOST")
-              .length) *
-          100
-        : 0;
+    const totalDeals = filteredDeals.length;
 
-    return { totalValue, wonValue, avgDealSize, winRate };
+    const totals = filteredDeals.reduce(
+      (acc, deal) => {
+        // Ensure value is a number (prevents string concatenation bugs)
+        const val = Number(deal.value) || 0;
+
+        acc.totalValue += val;
+
+        if (deal.stage === "WON") {
+          acc.wonValue += val;
+          acc.wonCount += 1;
+        }
+
+        if (deal.stage === "WON" || deal.stage === "LOST") {
+          acc.closedCount += 1;
+        }
+
+        return acc;
+      },
+      { totalValue: 0, wonValue: 0, wonCount: 0, closedCount: 0 },
+    );
+
+    return {
+      totalDeals,
+      totalValue: totals.totalValue,
+      wonValue: totals.wonValue,
+      avgDealSize: totalDeals > 0 ? totals.totalValue / totalDeals : 0,
+      winRate:
+        totals.closedCount > 0
+          ? (totals.wonCount / totals.closedCount) * 100
+          : 0,
+    };
   }, [filteredDeals]);
+
+  if (dealsLoading || allUserLoading) {
+    return (
+      <div className="flex flex-col items-center max-w-[1600px] gap-5 mx-auto justify-center py-20 overflow-y-hidden  flex-1">
+        <div className="w-full flex gap-10">
+          <Skeleton className="w-full h-24 rounded-md" />
+          <Skeleton className="w-full h-24 rounded-md" />
+          <Skeleton className="w-full h-24 rounded-md" />
+          <Skeleton className="w-full h-24 rounded-md" />
+        </div>
+        <Skeleton className="w-full h-24 rounded-md" />
+        <Skeleton className="w-full h-72  rounded-md" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-[1600px] mx-auto space-y-6">
       {/* Page Header */}
       <div className="flex flex-col gap-4">
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold">Deals</h1>
-            <p className="text-default-500 mt-1">
-              Manage your sales pipeline ({filteredDeals.length} total)
-            </p>
+        <div className="flex justify-between items-center ">
+          <div className="flex gap-5 justify-center items-center">
+            <Handshake size={30} />
+
+            <div>
+              <h1 className="text-3xl font-bold flex items-center gap-2">
+                Deals
+              </h1>
+              <p className="text-default-500 mt-1">
+                Manage sales pipeline ({filteredDeals.length} total)
+              </p>
+            </div>
           </div>
 
           <div className="flex gap-2">
-            <Button variant="flat" startContent={<Upload size={18} />}>
+            <Button
+              variant="flat"
+              radius="full"
+              color="primary"
+              startContent={<RefreshCcw size={18} />}
+              onPress={() => refetchDeals()}
+            >
+              Refresh
+            </Button>
+            <Button
+              radius="full"
+              variant="flat"
+              startContent={<Upload size={18} />}
+            >
               Import
             </Button>
-            <Button variant="flat" startContent={<Download size={18} />}>
+            <Button
+              radius="full"
+              variant="flat"
+              startContent={<Download size={18} />}
+            >
               Export
             </Button>
             <Button
               color="primary"
+              radius="full"
               startContent={<Plus size={18} />}
-              onPress={() => setIsAddModalOpen(true)}
+              onPress={() => router.push("/deals/new")}
             >
               Add Deal
             </Button>
@@ -417,8 +388,23 @@ export default function DealsPage({
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <Card radius="sm">
+            <CardBody className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-default-500">Total Deals</p>
+                  <p className="text-2xl font-bold">
+                    {stats.totalDeals.toLocaleString()}
+                  </p>
+                </div>
+                <div className="bg-primary-100 p-3 rounded-full">
+                  <List className="text-primary-600" size={24} />
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+          <Card radius="sm">
             <CardBody className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -427,14 +413,14 @@ export default function DealsPage({
                     {formatCurrency(stats.totalValue)}
                   </p>
                 </div>
-                <div className="bg-primary-100 p-3 rounded-lg">
+                <div className="bg-primary-100 p-3 rounded-full">
                   <DollarSign className="text-primary-600" size={24} />
                 </div>
               </div>
             </CardBody>
           </Card>
 
-          <Card>
+          <Card radius="sm">
             <CardBody className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -443,30 +429,30 @@ export default function DealsPage({
                     {formatCurrency(stats.wonValue)}
                   </p>
                 </div>
-                <div className="bg-success-100 p-3 rounded-lg">
+                <div className="bg-success-100 p-3 rounded-full">
                   <CheckCircle className="text-success-600" size={24} />
                 </div>
               </div>
             </CardBody>
           </Card>
 
-          <Card>
+          <Card radius="sm">
             <CardBody className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-default-500">Avg Deal Size</p>
+                  <p className="text-sm text-default-500">Avg Deal Value</p>
                   <p className="text-2xl font-bold">
                     {formatCurrency(stats.avgDealSize)}
                   </p>
                 </div>
-                <div className="bg-warning-100 p-3 rounded-lg">
+                <div className="bg-warning-100 p-3 rounded-full">
                   <TrendingUp className="text-warning-600" size={24} />
                 </div>
               </div>
             </CardBody>
           </Card>
 
-          <Card>
+          <Card radius="sm">
             <CardBody className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -475,7 +461,7 @@ export default function DealsPage({
                     {stats.winRate.toFixed(1)}%
                   </p>
                 </div>
-                <div className="bg-secondary-100 p-3 rounded-lg">
+                <div className="bg-secondary-100 p-3 rounded-full">
                   <Target className="text-secondary-600" size={24} />
                 </div>
               </div>
@@ -484,7 +470,7 @@ export default function DealsPage({
         </div>
 
         {/* Search and Filters */}
-        <Card>
+        <Card radius="sm">
           <CardBody>
             <div className="flex flex-col lg:flex-row gap-4">
               <Input
@@ -495,6 +481,8 @@ export default function DealsPage({
                 value={searchValue}
                 onValueChange={setSearchValue}
                 isClearable
+                radius="sm"
+                onClear={() => setSearchValue("")}
               />
 
               <div className="flex gap-2">
@@ -502,6 +490,7 @@ export default function DealsPage({
                   label="Stage"
                   placeholder="All stages"
                   className="w-40"
+                  radius="sm"
                   selectedKeys={stageFilter}
                   onSelectionChange={(keys) =>
                     setStageFilter(keys as Set<string>)
@@ -519,23 +508,46 @@ export default function DealsPage({
                   label="Assigned To"
                   placeholder="All users"
                   className="w-40"
+                  radius="sm"
                   selectedKeys={assignedFilter}
                   onSelectionChange={(keys) =>
-                    setAssignedFilter(keys as Set<string>)
+                    handleMultiSelectToggle(
+                      keys as Set<string>,
+                      setAssignedFilter,
+                    )
                   }
                   selectionMode="multiple"
                 >
-                  <SelectItem key="all">All Users</SelectItem>
-                  {teamMembers.map((member) => (
-                    <SelectItem key={member.id}>{member.name}</SelectItem>
-                  ))}
+                  <SelectItem
+                    key="all"
+                    className=" hover:bg-success/40! focus:bg-success/40!"
+                  >
+                    All Users
+                  </SelectItem>
+                  <SelectItem
+                    key="me"
+                    className=" hover:bg-primary/40! focus:bg-primary/40!"
+                  >
+                    Me
+                  </SelectItem>
+                  <>
+                    {allUsers
+                      .filter(
+                        (u) => u.role === "SALES" && u.id !== currentUser?.id,
+                      )
+                      .map((user) => (
+                        <SelectItem key={user.id}>{user.name}</SelectItem>
+                      ))}
+                  </>
+                  <SelectItem key="unassigned">Unassigned</SelectItem>
                 </Select>
 
                 <Button
-                  variant={activeFiltersCount > 0 ? "flat" : "bordered"}
+                  variant={activeFiltersCount > 0 ? "flat" : "light"}
                   color={activeFiltersCount > 0 ? "primary" : "default"}
                   startContent={<SlidersHorizontal size={18} />}
                   onPress={() => setIsFilterOpen(!isFilterOpen)}
+                  radius="sm"
                 >
                   Filters
                   {activeFiltersCount > 0 && (
@@ -544,25 +556,6 @@ export default function DealsPage({
                     </Chip>
                   )}
                 </Button>
-
-                <div className="flex border-2 border-default-200 rounded-lg">
-                  <Button
-                    isIconOnly
-                    variant={viewMode === "pipeline" ? "flat" : "light"}
-                    onPress={() => setViewMode("pipeline")}
-                    className="rounded-r-none"
-                  >
-                    <Grid size={18} />
-                  </Button>
-                  <Button
-                    isIconOnly
-                    variant={viewMode === "table" ? "flat" : "light"}
-                    onPress={() => setViewMode("table")}
-                    className="rounded-l-none"
-                  >
-                    <List size={18} />
-                  </Button>
-                </div>
               </div>
             </div>
 
@@ -573,6 +566,7 @@ export default function DealsPage({
                     label="Value Range"
                     placeholder="All values"
                     selectedKeys={new Set([valueFilter])}
+                    radius="sm"
                     onSelectionChange={(keys) =>
                       setValueFilter(Array.from(keys)[0] as string)
                     }
@@ -585,7 +579,13 @@ export default function DealsPage({
                 </div>
 
                 <div className="flex justify-end mt-4">
-                  <Button size="sm" variant="flat" onPress={clearAllFilters}>
+                  <Button
+                    radius="full"
+                    size="sm"
+                    variant="flat"
+                    color="danger"
+                    onPress={clearAllFilters}
+                  >
                     Clear All Filters
                   </Button>
                 </div>
@@ -595,265 +595,190 @@ export default function DealsPage({
         </Card>
       </div>
 
-      {/* Pipeline View */}
-      {viewMode === "pipeline" ? (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-          {pipelineData.map(({ stage, deals, totalValue }) => (
-            <Card key={stage} className="border-1 border-default">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between w-full">
-                  <div>
-                    <Chip
-                      size="sm"
-                      color={getStageColor(stage) as any}
-                      variant="flat"
-                    >
-                      {stage}
-                    </Chip>
-                    <p className="text-sm text-default-500 mt-1">
-                      {deals.length} deals • {formatCurrency(totalValue)}
-                    </p>
-                  </div>
+      {/*  Table View */}
+      <Table
+        aria-label="Deals table"
+        selectionMode="multiple"
+        selectedKeys={selectedKeys}
+        onSelectionChange={(keys) => setSelectedKeys(keys as Set<string>)}
+        radius="sm"
+        shadow="none"
+        classNames={{
+          tr: "dark:bg-transparent",
+          th: "border-b-2 border-default bg-transparent",
+        }}
+        bottomContent={
+          <Card
+            radius="sm"
+            shadow="none"
+            className="flex flex-row w-full justify-between items-center px-2 py-2"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-default-500">
+                Showing{" "}
+                {Math.min((page - 1) * rowsPerPage + 1, filteredDeals.length)}–
+                {Math.min(page * rowsPerPage, filteredDeals.length)} of{" "}
+                {filteredDeals.length} leads
+              </span>
+              <Select
+                size="sm"
+                className="w-20"
+                selectedKeys={new Set([rowsPerPage.toString()])}
+                onSelectionChange={(keys) => {
+                  setRowsPerPage(Number(Array.from(keys)[0]));
+                  setPage(1);
+                }}
+              >
+                <SelectItem key="10">10</SelectItem>
+                <SelectItem key="25">25</SelectItem>
+                <SelectItem key="50">50</SelectItem>
+                <SelectItem key="100">100</SelectItem>
+              </Select>
+            </div>
+            <Pagination
+              isCompact
+              showControls
+              showShadow
+              color="primary"
+              page={page}
+              total={pages}
+              onChange={setPage}
+            />
+          </Card>
+        }
+      >
+        <TableHeader>
+          <TableColumn>DEAL</TableColumn>
+          <TableColumn>CUSTOMER NAME</TableColumn>
+          <TableColumn>VALUE</TableColumn>
+          <TableColumn>STAGE</TableColumn>
+          <TableColumn>EXPECTED CLOSE</TableColumn>
+          <TableColumn>ASSIGNED TO</TableColumn>
+          <TableColumn>ACTIONS</TableColumn>
+        </TableHeader>
+        <TableBody emptyContent="No deals found.">
+          {paginatedDeals.map((deal) => (
+            <TableRow key={deal.id}>
+              <TableCell>
+                <div>
+                  <p className="font-semibold">{deal.title}</p>
+                  {deal.tags && (
+                    <div className="flex gap-1 mt-1">
+                      {deal.tags.map((tag) => (
+                        <Chip key={tag} size="sm" variant="flat">
+                          {tag}
+                        </Chip>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </CardHeader>
-              <CardBody className=" max-h-[600px]">
-                <div className="h-full w-full space-y-3">
-                  {deals.map((deal) => (
-                    <Card
-                      key={deal.id}
-                      isPressable
-                      shadow="sm"
-                      className=" w-full"
-                    >
-                      <CardBody className="p-3">
-                        <div className="flex justify-between items-start mb-2">
-                          <h4 className="font-semibold text-sm">
-                            {deal.title}
-                          </h4>
-                          <Dropdown>
-                            <DropdownTrigger>
-                              <Button isIconOnly size="sm" variant="light">
-                                <MoreVertical size={14} />
-                              </Button>
-                            </DropdownTrigger>
-                            <DropdownMenu>
-                              <DropdownItem
-                                key="edit"
-                                onPress={() => openEditModal(deal)}
-                              >
-                                Edit
-                              </DropdownItem>
-                              <DropdownItem
-                                key="delete"
-                                color="danger"
-                                onPress={() => {
-                                  setSelectedDeal(deal);
-                                  setIsDeleteModalOpen(true);
-                                }}
-                              >
-                                Delete
-                              </DropdownItem>
-                            </DropdownMenu>
-                          </Dropdown>
-                        </div>
-                        <p className="text-xs text-default-500 mb-2">
-                          {deal.customer.name}
-                        </p>
-                        <p className="text-lg font-bold text-primary mb-2">
-                          {formatCurrency(deal.value)}
-                        </p>
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-1">
-                            <Calendar size={12} />
-                            <span>{formatDate(deal.expectedCloseDate)}</span>
-                          </div>
-                          <Chip size="sm" variant="flat">
-                            {deal.probability}%
-                          </Chip>
-                        </div>
-                        {deal.assignedTo && (
-                          <div className="flex items-center gap-2 mt-2">
-                            <Avatar
-                              size="sm"
-                              name={deal.assignedTo.name}
-                              className="w-5 h-5"
-                            />
-                            <span className="text-xs">
-                              {deal.assignedTo.name}
-                            </span>
-                          </div>
-                        )}
-                      </CardBody>
-                    </Card>
-                  ))}
+              </TableCell>
+              <TableCell>
+                <div>
+                  <p className="font-medium">{deal.customerId}</p>
                 </div>
-                {deals.length === 0 && (
-                  <div className="text-center text-default-400 py-8">
-                    <p className="text-sm">No deals in this stage</p>
-                  </div>
-                )}
-              </CardBody>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        // Table View
-        <Card>
-          <CardBody className="p-0">
-            <Table
-              aria-label="Deals table"
-              selectionMode="multiple"
-              selectedKeys={selectedKeys}
-              onSelectionChange={(keys) => setSelectedKeys(keys as Set<string>)}
-              bottomContent={
-                <div className="flex w-full justify-center px-2 py-2">
-                  <Pagination
-                    isCompact
-                    showControls
-                    showShadow
-                    color="primary"
-                    page={page}
-                    total={pages}
-                    onChange={setPage}
+              </TableCell>
+              <TableCell>
+                <span className="font-semibold text-primary">
+                  {formatCurrency(deal.value)}
+                </span>
+              </TableCell>
+              <TableCell>
+                <Chip
+                  size="sm"
+                  variant="flat"
+                  color={getStageColor(deal.stage) as any}
+                >
+                  {deal.stage}
+                </Chip>
+              </TableCell>
+
+              <TableCell>
+                <div className="flex items-center gap-1 text-sm">
+                  <Calendar size={14} className="text-default-400" />
+                  <span>{formatDate(deal.expectedCloseDate)}</span>
+                </div>
+              </TableCell>
+              <TableCell>
+                {deal.assignedTo ? (
+                  <UserComponent
+                    name={
+                      allUsers.find((u) => u.id === deal.assignedTo)?.name ||
+                      "Unknown User"
+                    }
+                    avatarProps={{ size: "sm" }}
                   />
-                </div>
-              }
-            >
-              <TableHeader>
-                <TableColumn>DEAL</TableColumn>
-                <TableColumn>CUSTOMER</TableColumn>
-                <TableColumn>VALUE</TableColumn>
-                <TableColumn>STAGE</TableColumn>
-                <TableColumn>PROBABILITY</TableColumn>
-                <TableColumn>EXPECTED CLOSE</TableColumn>
-                <TableColumn>ASSIGNED TO</TableColumn>
-                <TableColumn>ACTIONS</TableColumn>
-              </TableHeader>
-              <TableBody>
-                {paginatedDeals.map((deal) => (
-                  <TableRow key={deal.id}>
-                    <TableCell>
-                      <div>
-                        <p className="font-semibold">{deal.title}</p>
-                        {deal.tags && (
-                          <div className="flex gap-1 mt-1">
-                            {deal.tags.map((tag) => (
-                              <Chip key={tag} size="sm" variant="flat">
-                                {tag}
-                              </Chip>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{deal.customer.name}</p>
-                        {deal.customer.company && (
-                          <p className="text-xs text-default-500">
-                            {deal.customer.company}
-                          </p>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="font-semibold text-primary">
-                        {formatCurrency(deal.value)}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        size="sm"
-                        variant="flat"
-                        color={getStageColor(deal.stage) as any}
-                      >
-                        {deal.stage}
-                      </Chip>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Progress
-                          value={deal.probability}
-                          color={
-                            deal.probability >= 75
-                              ? "success"
-                              : deal.probability >= 50
-                                ? "warning"
-                                : "default"
-                          }
-                          className="w-20"
-                        />
-                        <span className="text-sm font-semibold">
-                          {deal.probability}%
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1 text-sm">
-                        <Calendar size={14} className="text-default-400" />
-                        <span>{formatDate(deal.expectedCloseDate)}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {deal.assignedTo ? (
-                        <UserComponent
-                          name={deal.assignedTo.name}
-                          avatarProps={{ size: "sm" }}
-                        />
-                      ) : (
-                        <span className="text-default-400 text-sm">
-                          Unassigned
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Dropdown>
-                        <DropdownTrigger>
-                          <Button isIconOnly size="sm" variant="light">
-                            <MoreVertical size={16} />
-                          </Button>
-                        </DropdownTrigger>
-                        <DropdownMenu>
-                          <DropdownItem
-                            key="view"
-                            startContent={<Eye size={16} />}
-                          >
-                            View Details
-                          </DropdownItem>
-                          <DropdownItem
-                            key="edit"
-                            startContent={<Edit size={16} />}
-                            onPress={() => openEditModal(deal)}
-                          >
-                            Edit Deal
-                          </DropdownItem>
-                          <DropdownItem
-                            key="move"
-                            startContent={<ArrowRight size={16} />}
-                          >
-                            Move Stage
-                          </DropdownItem>
-                          <DropdownItem
-                            key="delete"
-                            color="danger"
-                            startContent={<Trash2 size={16} />}
-                            onPress={() => {
-                              setSelectedDeal(deal);
-                              setIsDeleteModalOpen(true);
-                            }}
-                          >
-                            Delete Deal
-                          </DropdownItem>
-                        </DropdownMenu>
-                      </Dropdown>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardBody>
-        </Card>
-      )}
+                ) : (
+                  <span className="text-default-400 text-sm">Unassigned</span>
+                )}
+              </TableCell>
+              <TableCell>
+                <Button
+                  isIconOnly
+                  aria-label="view-lead"
+                  size="sm"
+                  variant="light"
+                  onPress={() => router.push(`/deals/${deal.id}`)}
+                >
+                  <Eye size={16} />
+                </Button>
+                {deal.assignedTo === currentUser?.id && (
+                  <>
+                    <Button
+                      isIconOnly
+                      size="sm"
+                      aria-label="edit-lead"
+                      variant="light"
+                      onPress={() => router.push(`/deals/${deal.id}?edit=true`)}
+                    >
+                      <Edit size={16} />
+                    </Button>
+                    <Dropdown>
+                      <DropdownTrigger>
+                        <Button isIconOnly size="sm" variant="light">
+                          <MoreVertical size={16} />
+                        </Button>
+                      </DropdownTrigger>
+                      <DropdownMenu>
+                        <DropdownItem
+                          key="view"
+                          startContent={<Eye size={16} />}
+                        >
+                          View Details
+                        </DropdownItem>
+                        <DropdownItem
+                          key="edit"
+                          startContent={<Edit size={16} />}
+                          onPress={() => openEditModal(deal)}
+                        >
+                          Edit Deal
+                        </DropdownItem>
+                        <DropdownItem
+                          key="move"
+                          startContent={<ArrowRight size={16} />}
+                        >
+                          Move Stage
+                        </DropdownItem>
+                        <DropdownItem
+                          key="delete"
+                          color="danger"
+                          startContent={<Trash2 size={16} />}
+                          onPress={() => {
+                            setSelectedDeal(deal);
+                            setIsDeleteModalOpen(true);
+                          }}
+                        >
+                          Delete Deal
+                        </DropdownItem>
+                      </DropdownMenu>
+                    </Dropdown>
+                  </>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
 
       {/* Add Modal */}
       <Modal
@@ -873,10 +798,7 @@ export default function DealsPage({
                 label="Deal Title"
                 placeholder="Enter deal title"
                 isRequired
-                value={formData.title}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, title: value })
-                }
+                ref={titleRef}
               />
               <Select
                 label="Customer"
@@ -904,8 +826,7 @@ export default function DealsPage({
                 placeholder="50000"
                 isRequired
                 startContent={<DollarSign size={16} />}
-                value={formData.value}
-                onValueChange={(value) => setFormData({ ...formData, value })}
+                ref={valueRef}
               />
               <Select
                 label="Stage"
@@ -930,16 +851,7 @@ export default function DealsPage({
                   setFormData({ ...formData, expectedCloseDate: value })
                 }
               />
-              <Input
-                label="Probability (%)"
-                type="number"
-                min="0"
-                max="100"
-                value={formData.probability}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, probability: value })
-                }
-              />
+
               <Select
                 label="Assign To"
                 placeholder="Select team member"
@@ -965,10 +877,7 @@ export default function DealsPage({
               label="Notes"
               placeholder="Add any additional notes..."
               className="mt-4"
-              value={formData.notes}
-              onValueChange={(value) =>
-                setFormData({ ...formData, notes: value })
-              }
+              ref={notesRef}
             />
           </ModalBody>
           <ModalFooter>

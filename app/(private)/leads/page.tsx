@@ -1,123 +1,125 @@
 "use client";
-
-import { useState, useMemo } from "react";
 import {
+  Avatar,
+  Button,
   Card,
   CardBody,
-  CardHeader,
-  Button,
-  Input,
-  Table,
-  TableHeader,
-  TableColumn,
-  TableBody,
-  TableRow,
-  TableCell,
   Chip,
-  Avatar,
   Dropdown,
-  DropdownTrigger,
-  DropdownMenu,
   DropdownItem,
+  DropdownMenu,
+  DropdownTrigger,
+  Input,
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
   Pagination,
   Select,
   SelectItem,
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  Textarea,
-  DatePicker,
-  Tabs,
-  Tab,
-  Tooltip,
-  Checkbox,
-  CheckboxGroup,
+  Skeleton,
+  Spinner,
+  Table,
+  TableBody,
+  TableCell,
+  TableColumn,
+  TableHeader,
+  TableRow,
   User as UserComponent,
-  Badge,
-  Divider,
 } from "@heroui/react";
 import {
-  Search,
-  Plus,
-  Filter,
-  Download,
-  Upload,
-  MoreVertical,
-  Edit,
-  Trash2,
-  UserPlus,
-  Mail,
-  Phone,
-  Calendar,
-  ChevronDown,
-  X,
-  FileText,
+  CheckCircle,
   Clock,
-  TrendingUp,
+  Download,
+  Edit,
+  Eye,
   Grid,
   List,
-  SlidersHorizontal,
-  Eye,
+  Mail,
+  MoreVertical,
+  Phone,
+  Plus,
+  RefreshCcw,
+  Search,
   Send,
-  CheckCircle,
-  XCircle,
-  Archive,
-  Copy,
-  ExternalLink,
-  DollarSign,
+  SlidersHorizontal,
+  Target,
+  Trash2,
+  TrendingUp,
+  Upload,
+  UserPlus,
 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAllLeads } from "@/app/hooks/useAllLeads";
+import { useAllUser } from "@/app/hooks/useAllUsers";
+import { useServices } from "@/app/hooks/useServices";
+import { useUser } from "@/app/context/UserContext";
+import { Lead, LeadStatus, Service, User } from "@/app/types/types";
 
-// Types
-type LeadStatus = "NEW" | "CONTACTED" | "QUALIFIED" | "LOST";
-type Priority = "LOW" | "MEDIUM" | "HIGH";
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-interface Lead {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  companyName?: string;
-  status: LeadStatus;
-  source: string;
-  priority: Priority;
-  assignedTo?: {
-    id: string;
-    name: string;
-    avatar?: string;
-  };
-  value?: number;
-  tags?: string[];
-  lastContact?: string;
-  createdAt: string;
-  notes?: string;
-}
+const getStatusColor = (status: LeadStatus) =>
+  ({
+    NEW: "primary",
+    CONTACTED: "secondary",
+    QUALIFIED: "success",
+    LOST: "danger",
+  })[status] as "primary" | "secondary" | "success" | "danger";
 
-interface LeadsPageProps {
-  companyId: string;
-  userId: string;
-  userRole: "ADMIN" | "MANAGER" | "SALES" | "SUPPORT";
-}
+const formatDate = (dateStr?: string) => {
+  if (!dateStr) return "-";
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+};
 
-export default function LeadsPage({
-  companyId,
-  userId,
-  userRole,
-}: LeadsPageProps) {
-  // State
-  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
+// (removed deal currency helper — leads use counts)
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default function LeadsPage() {
+  const router = useRouter();
+  const currentUser = useUser();
+  const isAdmin =
+    currentUser?.role === "ADMIN" || currentUser?.role === "MANAGER";
+
   const [searchValue, setSearchValue] = useState("");
-  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set([]));
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+  const [isBulkAssignModalOpen, setIsBulkAssignModalOpen] = useState(false);
+  const [isBulkStatusModalOpen, setIsBulkStatusModalOpen] = useState(false);
+  const [bulkAssignUserId, setBulkAssignUserId] = useState<string | null>(null);
+  const [bulkNewStatus, setBulkNewStatus] = useState<LeadStatus | null>(null);
+  const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
+  const {
+    data: allLeads = [],
+    isLoading: leadsLoading,
+    refetch: refetchLeads,
+  } = useAllLeads(currentUser?.companyId || "");
 
-  // Filters
+  const { data: allUsers = [], isLoading: allUserLoading } = useAllUser<User[]>(
+    currentUser?.companyId || "",
+  );
+
+  const { data: allServices = [], isLoading: servicesLoading } = useServices(
+    currentUser?.companyId || "",
+  );
+
+  useEffect(() => {
+    refetchLeads();
+  }, [allLeads.length, refetchLeads]);
+
+  // Filters ──────────────────────────────────────────────
   const [statusFilter, setStatusFilter] = useState<Set<string>>(
     new Set(["all"]),
   );
@@ -127,280 +129,133 @@ export default function LeadsPage({
   const [assignedFilter, setAssignedFilter] = useState<Set<string>>(
     new Set(["all"]),
   );
-  const [priorityFilter, setPriorityFilter] = useState<Set<string>>(
+  const [servicesFilter, setServicesFilter] = useState<Set<string>>(
     new Set(["all"]),
   );
   const [dateRange, setDateRange] = useState<string>("all");
 
-  // Form state for new/edit lead
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    companyName: "",
-    status: "NEW" as LeadStatus,
-    source: "",
-    priority: "MEDIUM" as Priority,
-    assignedTo: "",
-    value: "",
-    notes: "",
-  });
+  // ── Filtered & paginated data ──────────────────────────────────────────────
 
-  // Mock data - replace with API calls
-  const mockLeads: Lead[] = [
-    {
-      id: "1",
-      name: "Sarah Johnson",
-      email: "sarah.j@acmecorp.com",
-      phone: "+1 234 567 8900",
-      companyName: "Acme Corporation",
-      status: "NEW",
-      source: "Website",
-      priority: "HIGH",
-      assignedTo: { id: "1", name: "John Doe", avatar: "/avatars/john.jpg" },
-      value: 50000,
-      tags: ["Enterprise", "Hot Lead"],
-      lastContact: "2 hours ago",
-      createdAt: "2024-06-15T10:30:00",
-      notes: "Interested in enterprise plan",
-    },
-    {
-      id: "2",
-      name: "Michael Chen",
-      email: "m.chen@techstart.io",
-      phone: "+1 234 567 8901",
-      companyName: "TechStart Inc",
-      status: "CONTACTED",
-      source: "Referral",
-      priority: "MEDIUM",
-      assignedTo: { id: "2", name: "Jane Smith" },
-      value: 25000,
-      tags: ["Startup"],
-      lastContact: "1 day ago",
-      createdAt: "2024-06-14T14:20:00",
-    },
-    {
-      id: "3",
-      name: "Emily Rodriguez",
-      email: "emily.r@business.com",
-      phone: "+1 234 567 8902",
-      companyName: "Business Solutions Ltd",
-      status: "QUALIFIED",
-      source: "LinkedIn",
-      priority: "HIGH",
-      assignedTo: { id: "1", name: "John Doe" },
-      value: 75000,
-      tags: ["Enterprise", "Decision Maker"],
-      lastContact: "3 hours ago",
-      createdAt: "2024-06-13T09:15:00",
-    },
-    {
-      id: "4",
-      name: "David Kim",
-      email: "david.k@startup.io",
-      phone: "+1 234 567 8903",
-      companyName: "Startup.io",
-      status: "NEW",
-      source: "Cold Email",
-      priority: "LOW",
-      assignedTo: { id: "2", name: "Jane Smith" },
-      value: 15000,
-      tags: ["SMB"],
-      lastContact: "Never",
-      createdAt: "2024-06-12T16:45:00",
-    },
-    {
-      id: "5",
-      name: "Lisa Thompson",
-      email: "lisa.t@enterprise.com",
-      phone: "+1 234 567 8904",
-      companyName: "Enterprise Systems",
-      status: "CONTACTED",
-      source: "Trade Show",
-      priority: "HIGH",
-      assignedTo: { id: "1", name: "John Doe" },
-      value: 100000,
-      tags: ["Enterprise", "Warm"],
-      lastContact: "5 hours ago",
-      createdAt: "2024-06-11T11:30:00",
-    },
-    // Add more mock data for pagination demo
-    ...Array.from({ length: 25 }, (_, i) => ({
-      id: `${i + 6}`,
-      name: `Lead ${i + 6}`,
-      email: `lead${i + 6}@company.com`,
-      phone: `+1 234 567 ${8900 + i}`,
-      companyName: `Company ${i + 6}`,
-      status: ["NEW", "CONTACTED", "QUALIFIED", "LOST"][i % 4] as LeadStatus,
-      source: ["Website", "Referral", "LinkedIn", "Cold Email"][i % 4],
-      priority: ["LOW", "MEDIUM", "HIGH"][i % 3] as Priority,
-      assignedTo: {
-        id: `${(i % 2) + 1}`,
-        name: i % 2 === 0 ? "John Doe" : "Jane Smith",
-      },
-      value: Math.floor(Math.random() * 100000),
-      tags: ["Tag1", "Tag2"],
-      lastContact: `${i + 1} days ago`,
-      createdAt: new Date(Date.now() - (i + 1) * 86400000).toISOString(),
-    })),
-  ];
+  // When selecting filters, ensure "all" behaves exclusively: selecting any
+  // other option should unselect "all", and selecting "all" should clear
+  // other selections.
+  const handleMultiSelectToggle = (
+    keys: Set<string>,
+    setter: (s: Set<string>) => void,
+  ) => {
+    const k = new Set(Array.from(keys) as string[]);
+    if (k.has("all")) {
+      if (k.size === 1) setter(new Set(["all"]));
+      else {
+        k.delete("all");
+        setter(k);
+      }
+    } else {
+      setter(k);
+    }
+  };
 
-  const teamMembers = [
-    { id: "1", name: "John Doe", avatar: "/avatars/john.jpg" },
-    { id: "2", name: "Jane Smith", avatar: "/avatars/jane.jpg" },
-    { id: "3", name: "Mike Wilson", avatar: "/avatars/mike.jpg" },
-  ];
-
-  const sources = [
-    "Website",
-    "Referral",
-    "LinkedIn",
-    "Cold Email",
-    "Trade Show",
-    "Partner",
-    "Advertisement",
-  ];
-
-  // Filtered and paginated data
   const filteredLeads = useMemo(() => {
-    let filtered = [...mockLeads];
+    let filtered: Lead[] = allLeads;
 
-    // Search filter
+    // if (!isAdmin) {
+    //   filtered = filtered.filter((l) => l.assignedTo === currentUser?.id);
+    // }
+
     if (searchValue) {
+      const q = searchValue.toLowerCase();
       filtered = filtered.filter(
-        (lead) =>
-          lead.name.toLowerCase().includes(searchValue.toLowerCase()) ||
-          lead.email.toLowerCase().includes(searchValue.toLowerCase()) ||
-          lead.companyName?.toLowerCase().includes(searchValue.toLowerCase()) ||
-          lead.phone.includes(searchValue),
+        (l) =>
+          l.name.toLowerCase().includes(q) ||
+          l.email?.toLowerCase().includes(q) ||
+          l.phone?.includes(searchValue),
       );
     }
 
-    // Status filter
     if (!statusFilter.has("all")) {
-      filtered = filtered.filter((lead) => statusFilter.has(lead.status));
+      filtered = filtered.filter((l) => statusFilter.has(l.status));
     }
 
-    // Source filter
     if (!sourceFilter.has("all")) {
-      filtered = filtered.filter((lead) => sourceFilter.has(lead.source));
+      filtered = filtered.filter((l) => l.source && sourceFilter.has(l.source));
     }
 
-    // Assigned filter
-    if (!assignedFilter.has("all")) {
+    if (assignedFilter.has("unassigned")) {
       filtered = filtered.filter(
-        (lead) => lead.assignedTo && assignedFilter.has(lead.assignedTo.id),
+        (l) => !l.assignedTo || assignedFilter.has(l.assignedTo),
+      );
+    } else if (!assignedFilter.has("all")) {
+      filtered = filtered.filter(
+        (l) => l.assignedTo && assignedFilter.has(l.assignedTo),
       );
     }
 
-    // Priority filter
-    if (!priorityFilter.has("all")) {
-      filtered = filtered.filter((lead) => priorityFilter.has(lead.priority));
+    if (!servicesFilter.has("all")) {
+      filtered = filtered.filter((l) =>
+        (l.serviceIds ?? []).some((id) => servicesFilter.has(id)),
+      );
+    }
+
+    if (dateRange !== "all") {
+      const now = new Date();
+      const cutoff = new Date();
+      if (dateRange === "today") cutoff.setHours(0, 0, 0, 0);
+      else if (dateRange === "week") cutoff.setDate(now.getDate() - 7);
+      else if (dateRange === "month") cutoff.setMonth(now.getMonth() - 1);
+      else if (dateRange === "quarter") cutoff.setMonth(now.getMonth() - 3);
+      filtered = filtered.filter((l) => new Date(l.createdAt) >= cutoff);
     }
 
     return filtered;
   }, [
-    mockLeads,
+    allLeads,
     searchValue,
     statusFilter,
     sourceFilter,
     assignedFilter,
-    priorityFilter,
+    servicesFilter,
+    dateRange,
   ]);
 
-  const pages = Math.ceil(filteredLeads.length / rowsPerPage);
+  const pages = Math.max(1, Math.ceil(filteredLeads.length / rowsPerPage));
+
   const paginatedLeads = useMemo(() => {
     const start = (page - 1) * rowsPerPage;
-    const end = start + rowsPerPage;
-    return filteredLeads.slice(start, end);
+    return filteredLeads.slice(start, start + rowsPerPage);
   }, [filteredLeads, page, rowsPerPage]);
 
-  // Helper functions
-  const getStatusColor = (status: LeadStatus) => {
-    const colors = {
-      NEW: "primary",
-      CONTACTED: "secondary",
-      QUALIFIED: "success",
-      LOST: "danger",
-    };
-    return colors[status];
-  };
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (!statusFilter.has("all")) count++;
+    if (!sourceFilter.has("all")) count++;
+    if (!assignedFilter.has("all")) count++;
+    if (!servicesFilter.has("all")) count++;
+    if (dateRange !== "all") count++;
+    return count;
+  }, [statusFilter, sourceFilter, assignedFilter, servicesFilter, dateRange]);
 
-  const getPriorityColor = (priority: Priority) => {
-    const colors = {
-      LOW: "success",
-      MEDIUM: "warning",
-      HIGH: "danger",
-    };
-    return colors[priority];
-  };
+  const stats = useMemo(() => {
+    // Lead-focused stats (based on filtered leads)
+    const totalLeads = filteredLeads.length;
+    const now = new Date();
+    const weekAgo = new Date(now);
+    weekAgo.setDate(now.getDate() - 7);
+    const newThisWeek = filteredLeads.filter(
+      (l) => new Date(l.createdAt) >= weekAgo,
+    ).length;
+    const assignedCount = filteredLeads.filter((l) => !!l.assignedTo).length;
+    const unassignedCount = filteredLeads.filter((l) => !l.assignedTo).length;
+    return { totalLeads, newThisWeek, assignedCount, unassignedCount };
+  }, [filteredLeads]);
 
-  const formatCurrency = (value?: number) => {
-    if (!value) return "-";
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
-  const handleAddLead = () => {
-    console.log("Adding lead:", formData);
-    // API call to create lead
-    setIsAddModalOpen(false);
-    resetForm();
-  };
-
-  const handleEditLead = () => {
-    console.log("Editing lead:", selectedLead?.id, formData);
-    // API call to update lead
-    setIsEditModalOpen(false);
-    resetForm();
-  };
-
-  const handleDeleteLead = () => {
-    console.log("Deleting lead:", selectedLead?.id);
-    // API call to delete lead
-    setIsDeleteModalOpen(false);
-    setSelectedLead(null);
-  };
-
-  const handleBulkAction = (action: string) => {
-    console.log(`Bulk action: ${action} on leads:`, Array.from(selectedKeys));
-    // Handle bulk actions
-  };
-
-  const resetForm = () => {
-    setFormData({
-      name: "",
-      email: "",
-      phone: "",
-      companyName: "",
-      status: "NEW",
-      source: "",
-      priority: "MEDIUM",
-      assignedTo: "",
-      value: "",
-      notes: "",
-    });
-  };
-
-  const openEditModal = (lead: Lead) => {
-    setSelectedLead(lead);
-    setFormData({
-      name: lead.name,
-      email: lead.email,
-      phone: lead.phone,
-      companyName: lead.companyName || "",
-      status: lead.status,
-      source: lead.source,
-      priority: lead.priority,
-      assignedTo: lead.assignedTo?.id || "",
-      value: lead.value?.toString() || "",
-      notes: lead.notes || "",
-    });
-    setIsEditModalOpen(true);
+  const clearAllFilters = () => {
+    setStatusFilter(new Set(["all"]));
+    setSourceFilter(new Set(["all"]));
+    setAssignedFilter(new Set(["all"]));
+    setServicesFilter(new Set(["all"]));
+    setDateRange("all");
   };
 
   const openDeleteModal = (lead: Lead) => {
@@ -408,77 +263,356 @@ export default function LeadsPage({
     setIsDeleteModalOpen(true);
   };
 
-  const clearAllFilters = () => {
-    setStatusFilter(new Set(["all"]));
-    setSourceFilter(new Set(["all"]));
-    setAssignedFilter(new Set(["all"]));
-    setPriorityFilter(new Set(["all"]));
-    setDateRange("all");
+  // ── API handlers ───────────────────────────────────────────────────────────
+
+  const handleDeleteLead = async () => {
+    if (!selectedLead) return;
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(
+        `/api/leads/${selectedLead.id}?companyId=${currentUser?.companyId}`,
+        {
+          method: "DELETE",
+        },
+      );
+      if (res.ok) {
+        await refetchLeads();
+        setIsDeleteModalOpen(false);
+        setSelectedLead(null);
+      } else {
+        const err = await res.json();
+        alert(`Error: ${err.error}`);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const activeFiltersCount = useMemo(() => {
-    let count = 0;
-    if (!statusFilter.has("all")) count++;
-    if (!sourceFilter.has("all")) count++;
-    if (!assignedFilter.has("all")) count++;
-    if (!priorityFilter.has("all")) count++;
-    if (dateRange !== "all") count++;
-    return count;
-  }, [statusFilter, sourceFilter, assignedFilter, priorityFilter, dateRange]);
+  const handleConvertToDeal = async (lead: Lead) => {
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/convert`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        const { dealId } = await res.json();
+        router.push(`/deals/${dealId}`);
+      } else {
+        const err = await res.json();
+        alert(`Error: ${err.error}`);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleStatusChange = async (lead: Lead, status: LeadStatus) => {
+    try {
+      await fetch(`/api/leads/${lead.id}?companyId=${currentUser?.companyId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      await refetchLeads();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleBulkAction = async (action: string) => {
+    const ids = Array.from(selectedKeys);
+    if (!ids.length) return;
+
+    switch (action) {
+      case "delete":
+        setIsBulkDeleteModalOpen(true);
+        break;
+
+      case "email": {
+        const emails = allLeads
+          .filter((l: Lead) => ids.includes(l.id))
+          .map((l: Lead) => l.email)
+          .filter(Boolean)
+          .join(",");
+        window.location.href = `mailto:${emails}`;
+        break;
+      }
+
+      case "status":
+        setIsBulkStatusModalOpen(true);
+        break;
+
+      case "assign":
+        setIsBulkAssignModalOpen(true);
+        break;
+    }
+  };
+
+  const performBulkDelete = async () => {
+    const ids = Array.from(selectedKeys);
+    if (!ids.length) return;
+    setIsBulkSubmitting(true);
+    try {
+      const idsParam = ids.join(",");
+      const response = await fetch(
+        `/api/leads/${idsParam}?companyId=${currentUser?.companyId}`,
+        { method: "DELETE" },
+      );
+      if (!response.ok) throw new Error("Failed to delete");
+      await refetchLeads();
+      setSelectedKeys(new Set());
+      setIsBulkDeleteModalOpen(false);
+    } catch (error) {
+      console.error("Bulk Delete Error:", error);
+      alert("Something went wrong during deletion.");
+    } finally {
+      setIsBulkSubmitting(false);
+    }
+  };
+
+  const performBulkAssign = async () => {
+    const ids = Array.from(selectedKeys);
+    if (!ids.length || !bulkAssignUserId) return;
+    setIsBulkSubmitting(true);
+    try {
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`/api/leads/${id}?companyId=${currentUser?.companyId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ assignedTo: bulkAssignUserId }),
+          }),
+        ),
+      );
+      await refetchLeads();
+      setSelectedKeys(new Set());
+      setIsBulkAssignModalOpen(false);
+      setBulkAssignUserId(null);
+    } catch (error) {
+      console.error("Bulk Assign Error:", error);
+      alert("Something went wrong during assign.");
+    } finally {
+      setIsBulkSubmitting(false);
+    }
+  };
+
+  const performBulkStatusChange = async () => {
+    const ids = Array.from(selectedKeys);
+    if (!ids.length || !bulkNewStatus) return;
+    setIsBulkSubmitting(true);
+    try {
+      const idsParam = ids.join(",");
+      const response = await fetch(
+        `/api/leads/${idsParam}?companyId=${currentUser?.companyId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: bulkNewStatus }),
+        },
+      );
+      if (!response.ok) throw new Error("Failed to delete");
+      await refetchLeads();
+      setSelectedKeys(new Set());
+      setIsBulkStatusModalOpen(false);
+      setBulkNewStatus(null);
+    } catch (error) {
+      console.error("Bulk Status Error:", error);
+      alert("Something went wrong during status update.");
+    } finally {
+      setIsBulkSubmitting(false);
+    }
+  };
+
+  const handleExport = () => {
+    const headers = [
+      "Name",
+      "Email",
+      "Phone",
+      "Status",
+      "Source",
+      "Created At",
+    ];
+    const rows = filteredLeads.map((l: Lead) => [
+      l.name,
+      l.email,
+      l.phone,
+      l.status,
+      l.source,
+      formatDate(l.createdAt),
+    ]);
+    const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "leads.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // ── Loading ────────────────────────────────────────────────────────────────
+
+  if (leadsLoading || allUserLoading || servicesLoading) {
+    return (
+      <div className="flex flex-col items-center max-w-[1600px] gap-5 mx-auto justify-center py-20 overflow-y-hidden  flex-1">
+        <div className="w-full flex gap-10">
+          <Skeleton className="w-full h-24 rounded-md" />
+          <Skeleton className="w-full h-24 rounded-md" />
+          <Skeleton className="w-full h-24 rounded-md" />
+          <Skeleton className="w-full h-24 rounded-md" />
+        </div>
+        <Skeleton className="w-full h-24 rounded-md" />
+        <Skeleton className="w-full h-72  rounded-md" />
+      </div>
+    );
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="p-6 max-w-[1600px] mx-auto space-y-6">
-      {/* Page Header */}
+      {/* ── Header ── */}
       <div className="flex flex-col gap-4">
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold">Leads</h1>
-            <p className="text-default-500 mt-1">
-              Manage and track all your leads ({filteredLeads.length} total)
-            </p>
+        <div className="flex justify-between items-center ">
+          <div className="flex gap-5 justify-center items-center">
+            <Target size={30} />
+
+            <div>
+              <h1 className="text-3xl font-bold flex items-center gap-2">
+                Leads
+              </h1>
+              <p className="text-default-500 mt-1">
+                Manage and track all your leads ({filteredLeads.length} total)
+              </p>
+            </div>
           </div>
 
-          <div className="flex gap-2">
-            <Button variant="flat" startContent={<Upload size={18} />}>
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="flat"
+              radius="full"
+              color="primary"
+              startContent={<RefreshCcw size={18} />}
+              onPress={() => refetchLeads()}
+            >
+              Refresh
+            </Button>
+            <Button
+              variant="flat"
+              radius="full"
+              startContent={<Upload size={18} />}
+            >
               Import
             </Button>
-            <Button variant="flat" startContent={<Download size={18} />}>
+            <Button
+              variant="flat"
+              radius="full"
+              startContent={<Download size={18} />}
+              onPress={handleExport}
+            >
               Export
             </Button>
             <Button
               color="primary"
+              radius="full"
               startContent={<Plus size={18} />}
-              onPress={() => setIsAddModalOpen(true)}
+              onPress={() => router.push("/leads/new")}
             >
               Add Lead
             </Button>
           </div>
         </div>
 
-        {/* Search and Filters Bar */}
-        <Card>
+        {/* ── Stats Cards ── */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card radius="sm">
+            <CardBody className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-default-500">Total Leads</p>
+                  <p className="text-2xl font-bold">
+                    {stats.totalLeads.toLocaleString()}
+                  </p>
+                </div>
+                <div className="bg-primary-100 p-3 rounded-full">
+                  <List className="text-primary-600" size={24} />
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+
+          <Card radius="sm">
+            <CardBody className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-default-500">New This Week</p>
+                  <p className="text-2xl font-bold">{stats.newThisWeek}</p>
+                </div>
+                <div className="bg-secondary-100 p-3 rounded-full">
+                  <Clock className="text-secondary-600" size={24} />
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+
+          <Card radius="sm">
+            <CardBody className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-default-500">Assigned</p>
+                  <p className="text-2xl font-bold">{stats.assignedCount}</p>
+                </div>
+                <div className="bg-success-100 p-3 rounded-full">
+                  <UserPlus className="text-success-600" size={24} />
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+
+          <Card radius="sm">
+            <CardBody className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-default-500">Unassigned</p>
+                  <p className="text-2xl font-bold">{stats.unassignedCount}</p>
+                </div>
+                <div className="bg-warning-100 p-3 rounded-full">
+                  <Target className="text-warning-600" size={24} />
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+        </div>
+
+        {/* ── Search & Quick Filters ── */}
+        <Card radius="sm">
           <CardBody>
-            <div className="flex flex-col lg:flex-row gap-4">
-              {/* Search */}
+            <div className="flex flex-col lg:flex-row gap-4 ">
               <Input
                 className="flex-1"
-                placeholder="Search leads by name, email, company, or phone..."
+                placeholder="Search leads by name, email, or phone…"
+                label="Search any lead"
                 startContent={<Search size={18} className="text-default-400" />}
                 value={searchValue}
                 onValueChange={setSearchValue}
                 isClearable
+                radius="sm"
                 onClear={() => setSearchValue("")}
               />
 
-              {/* Quick Filters */}
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <Select
                   label="Status"
                   placeholder="All statuses"
                   className="w-40"
+                  radius="sm"
                   selectedKeys={statusFilter}
                   onSelectionChange={(keys) =>
-                    setStatusFilter(keys as Set<string>)
+                    handleMultiSelectToggle(
+                      keys as Set<string>,
+                      setStatusFilter,
+                    )
                   }
                   selectionMode="multiple"
                 >
@@ -493,16 +627,39 @@ export default function LeadsPage({
                   label="Assigned To"
                   placeholder="All users"
                   className="w-40"
+                  radius="sm"
                   selectedKeys={assignedFilter}
                   onSelectionChange={(keys) =>
-                    setAssignedFilter(keys as Set<string>)
+                    handleMultiSelectToggle(
+                      keys as Set<string>,
+                      setAssignedFilter,
+                    )
                   }
                   selectionMode="multiple"
                 >
-                  <SelectItem key="all">All Users</SelectItem>
-                  {teamMembers.map((member) => (
-                    <SelectItem key={member.id}>{member.name}</SelectItem>
-                  ))}
+                  <SelectItem
+                    key="all"
+                    className="hover:bg-success/40! focus:bg-success/40!"
+                  >
+                    All Users
+                  </SelectItem>
+                  <SelectItem
+                    key="me"
+                    className=" hover:bg-primary/40! focus:bg-primary/40!"
+                  >
+                    Me
+                  </SelectItem>
+                  <>
+                    {allUsers
+                      .filter(
+                        (u: User) =>
+                          u.role === "SALES" && u.id !== currentUser?.id,
+                      )
+                      .map((user: User) => (
+                        <SelectItem key={user.id}>{user.name}</SelectItem>
+                      ))}
+                  </>
+                  <SelectItem key="unassigned">Unassigned</SelectItem>
                 </Select>
 
                 <Button
@@ -510,6 +667,7 @@ export default function LeadsPage({
                   color={activeFiltersCount > 0 ? "primary" : "default"}
                   startContent={<SlidersHorizontal size={18} />}
                   onPress={() => setIsFilterOpen(!isFilterOpen)}
+                  radius="sm"
                 >
                   Filters
                   {activeFiltersCount > 0 && (
@@ -518,65 +676,59 @@ export default function LeadsPage({
                     </Chip>
                   )}
                 </Button>
-
-                <div className="flex border-2 border-default-200 rounded-lg">
-                  <Button
-                    isIconOnly
-                    variant={viewMode === "table" ? "flat" : "light"}
-                    onPress={() => setViewMode("table")}
-                    className="rounded-r-none"
-                  >
-                    <List size={18} />
-                  </Button>
-                  <Button
-                    isIconOnly
-                    variant={viewMode === "grid" ? "flat" : "light"}
-                    onPress={() => setViewMode("grid")}
-                    className="rounded-l-none"
-                  >
-                    <Grid size={18} />
-                  </Button>
-                </div>
               </div>
             </div>
 
-            {/* Advanced Filters Panel */}
+            {/* Advanced Filters */}
             {isFilterOpen && (
               <div className="mt-4 pt-4 border-t border-divider">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 ">
                   <Select
                     label="Source"
                     placeholder="All sources"
                     selectedKeys={sourceFilter}
+                    radius="sm"
                     onSelectionChange={(keys) =>
-                      setSourceFilter(keys as Set<string>)
+                      handleMultiSelectToggle(
+                        keys as Set<string>,
+                        setSourceFilter,
+                      )
                     }
                     selectionMode="multiple"
                   >
                     <SelectItem key="all">All Sources</SelectItem>
-                    {sources.map((source) => (
-                      <SelectItem key={source}>{source}</SelectItem>
-                    ))}
+                    <SelectItem key="Website">Website</SelectItem>
+                    <SelectItem key="Referral">Referral</SelectItem>
+                    <SelectItem key="LinkedIn">LinkedIn</SelectItem>
+                    <SelectItem key="Cold Email">Cold Email</SelectItem>
+                    <SelectItem key="Trade Show">Trade Show</SelectItem>
+                    <SelectItem key="Partner">Partner</SelectItem>
+                    <SelectItem key="Advertisement">Advertisement</SelectItem>
                   </Select>
 
                   <Select
-                    label="Priority"
-                    placeholder="All priorities"
-                    selectedKeys={priorityFilter}
+                    label="Services"
+                    placeholder="All services"
+                    selectedKeys={servicesFilter}
+                    radius="sm"
                     onSelectionChange={(keys) =>
-                      setPriorityFilter(keys as Set<string>)
+                      handleMultiSelectToggle(
+                        keys as Set<string>,
+                        setServicesFilter,
+                      )
                     }
                     selectionMode="multiple"
                   >
-                    <SelectItem key="all">All Priorities</SelectItem>
-                    <SelectItem key="LOW">Low</SelectItem>
-                    <SelectItem key="MEDIUM">Medium</SelectItem>
-                    <SelectItem key="HIGH">High</SelectItem>
+                    <SelectItem key="all">All Services</SelectItem>
+                    {allServices.map((s: Service) => (
+                      <SelectItem key={s.id}>{s.name}</SelectItem>
+                    ))}
                   </Select>
 
                   <Select
                     label="Date Range"
                     placeholder="All time"
+                    radius="sm"
                     selectedKeys={new Set([dateRange])}
                     onSelectionChange={(keys) =>
                       setDateRange(Array.from(keys)[0] as string)
@@ -589,9 +741,14 @@ export default function LeadsPage({
                     <SelectItem key="quarter">This Quarter</SelectItem>
                   </Select>
                 </div>
-
                 <div className="flex justify-end mt-4">
-                  <Button size="sm" variant="flat" onPress={clearAllFilters}>
+                  <Button
+                    size="sm"
+                    variant="flat"
+                    radius="full"
+                    color="danger"
+                    onPress={clearAllFilters}
+                  >
                     Clear All Filters
                   </Button>
                 </div>
@@ -600,7 +757,7 @@ export default function LeadsPage({
           </CardBody>
         </Card>
 
-        {/* Bulk Actions */}
+        {/* ── Bulk Actions ── */}
         {selectedKeys.size > 0 && (
           <Card className="bg-primary-50 border-primary-200">
             <CardBody>
@@ -649,616 +806,289 @@ export default function LeadsPage({
         )}
       </div>
 
-      {/* Table View */}
-      {viewMode === "table" ? (
-        <Card>
-          <CardBody className="p-0">
-            <Table
-              aria-label="Leads table"
-              selectionMode="multiple"
-              selectedKeys={selectedKeys}
-              onSelectionChange={(keys) => setSelectedKeys(keys as Set<string>)}
-              bottomContent={
-                <div className="flex w-full justify-between items-center px-2 py-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-default-500">
-                      Showing {(page - 1) * rowsPerPage + 1} to{" "}
-                      {Math.min(page * rowsPerPage, filteredLeads.length)} of{" "}
-                      {filteredLeads.length} leads
-                    </span>
-                    <Select
-                      size="sm"
-                      className="w-20"
-                      selectedKeys={new Set([rowsPerPage.toString()])}
-                      onSelectionChange={(keys) => {
-                        setRowsPerPage(Number(Array.from(keys)[0]));
-                        setPage(1);
-                      }}
-                    >
-                      <SelectItem key="10">10</SelectItem>
-                      <SelectItem key="25">25</SelectItem>
-                      <SelectItem key="50">50</SelectItem>
-                      <SelectItem key="100">100</SelectItem>
-                    </Select>
-                  </div>
-                  <Pagination
-                    isCompact
-                    showControls
-                    showShadow
-                    color="primary"
-                    page={page}
-                    total={pages}
-                    onChange={setPage}
-                  />
-                </div>
-              }
-            >
-              <TableHeader>
-                <TableColumn>LEAD</TableColumn>
-                <TableColumn>CONTACT</TableColumn>
-                <TableColumn>STATUS</TableColumn>
-                <TableColumn>PRIORITY</TableColumn>
-                <TableColumn>SOURCE</TableColumn>
-                <TableColumn>VALUE</TableColumn>
-                <TableColumn>ASSIGNED TO</TableColumn>
-                <TableColumn>LAST CONTACT</TableColumn>
-                <TableColumn>ACTIONS</TableColumn>
-              </TableHeader>
-              <TableBody>
-                {paginatedLeads.map((lead) => (
-                  <TableRow key={lead.id}>
-                    <TableCell>
-                      <div>
-                        <p className="font-semibold">{lead.name}</p>
-                        {lead.companyName && (
-                          <p className="text-xs text-default-500">
-                            {lead.companyName}
-                          </p>
-                        )}
-                        {lead.tags && lead.tags.length > 0 && (
-                          <div className="flex gap-1 mt-1">
-                            {lead.tags.map((tag) => (
-                              <Chip key={tag} size="sm" variant="flat">
-                                {tag}
-                              </Chip>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-xs">
-                          <Mail size={12} className="text-default-400" />
-                          <span>{lead.email}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs">
-                          <Phone size={12} className="text-default-400" />
-                          <span>{lead.phone}</span>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        size="sm"
-                        variant="flat"
-                        color={getStatusColor(lead.status) as any}
-                      >
-                        {lead.status}
-                      </Chip>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        size="sm"
-                        variant="dot"
-                        color={getPriorityColor(lead.priority) as any}
-                      >
-                        {lead.priority}
-                      </Chip>
-                    </TableCell>
-                    <TableCell>
-                      <Chip size="sm" variant="bordered">
-                        {lead.source}
-                      </Chip>
-                    </TableCell>
-                    <TableCell>
-                      <span className="font-semibold">
-                        {formatCurrency(lead.value)}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      {lead.assignedTo ? (
-                        <UserComponent
-                          name={lead.assignedTo.name}
-                          avatarProps={{
-                            src: lead.assignedTo.avatar,
-                            size: "sm",
-                          }}
-                        />
-                      ) : (
-                        <span className="text-default-400 text-sm">
-                          Unassigned
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1 text-xs text-default-500">
-                        <Clock size={12} />
-                        <span>{lead.lastContact}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Dropdown>
-                        <DropdownTrigger>
-                          <Button isIconOnly size="sm" variant="light">
-                            <MoreVertical size={16} />
-                          </Button>
-                        </DropdownTrigger>
-                        <DropdownMenu aria-label="Lead actions">
-                          <DropdownItem
-                            key="view"
-                            startContent={<Eye size={16} />}
-                          >
-                            View Details
-                          </DropdownItem>
-                          <DropdownItem
-                            key="edit"
-                            startContent={<Edit size={16} />}
-                            onPress={() => openEditModal(lead)}
-                          >
-                            Edit Lead
-                          </DropdownItem>
-                          <DropdownItem
-                            key="email"
-                            startContent={<Mail size={16} />}
-                          >
-                            Send Email
-                          </DropdownItem>
-                          <DropdownItem
-                            key="call"
-                            startContent={<Phone size={16} />}
-                          >
-                            Schedule Call
-                          </DropdownItem>
-                          <DropdownItem
-                            key="convert"
-                            startContent={<TrendingUp size={16} />}
-                          >
-                            Convert to Deal
-                          </DropdownItem>
-                          <DropdownItem
-                            key="duplicate"
-                            startContent={<Copy size={16} />}
-                          >
-                            Duplicate
-                          </DropdownItem>
-                          <DropdownItem
-                            key="delete"
-                            color="danger"
-                            startContent={<Trash2 size={16} />}
-                            onPress={() => openDeleteModal(lead)}
-                          >
-                            Delete Lead
-                          </DropdownItem>
-                        </DropdownMenu>
-                      </Dropdown>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardBody>
-        </Card>
-      ) : (
-        // Grid View
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {paginatedLeads.map((lead) => (
-            <Card key={lead.id} isPressable>
-              <CardBody className="p-4">
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-lg">{lead.name}</h3>
-                    {lead.companyName && (
-                      <p className="text-sm text-default-500">
-                        {lead.companyName}
-                      </p>
-                    )}
-                  </div>
-                  <Dropdown>
-                    <DropdownTrigger>
-                      <Button isIconOnly size="sm" variant="light">
-                        <MoreVertical size={16} />
-                      </Button>
-                    </DropdownTrigger>
-                    <DropdownMenu>
-                      <DropdownItem
-                        key="edit"
-                        onPress={() => openEditModal(lead)}
-                      >
-                        Edit
-                      </DropdownItem>
-                      <DropdownItem
-                        key="delete"
-                        color="danger"
-                        onPress={() => openDeleteModal(lead)}
-                      >
-                        Delete
-                      </DropdownItem>
-                    </DropdownMenu>
-                  </Dropdown>
-                </div>
+      {/* ── Table View ── */}
 
-                <div className="space-y-2 mb-3">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Mail size={14} className="text-default-400" />
-                    <span className="truncate">{lead.email}</span>
+      <Table
+        aria-label="Leads table"
+        selectionMode="multiple"
+        selectedKeys={selectedKeys}
+        radius="sm"
+        shadow="none"
+        classNames={{
+          tr: "dark:bg-transparent",
+          th: "border-b-2 border-default bg-transparent",
+        }}
+        onSelectionChange={(keys) => {
+          const allowedIds = new Set(
+            filteredLeads
+              .filter((l) => l.assignedTo === currentUser?.id)
+              .map((l) => l.id),
+          );
+          const validSelection = new Set(
+            Array.from(keys).filter((key) => allowedIds.has(key as string)),
+          );
+          setSelectedKeys(validSelection as Set<string>);
+        }}
+        bottomContent={
+          <Card
+            radius="sm"
+            shadow="none"
+            className="flex flex-row w-full justify-between items-center px-2 py-2"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-default-500">
+                Showing{" "}
+                {Math.min((page - 1) * rowsPerPage + 1, filteredLeads.length)}–
+                {Math.min(page * rowsPerPage, filteredLeads.length)} of{" "}
+                {filteredLeads.length} leads
+              </span>
+              <Select
+                size="sm"
+                className="w-20"
+                selectedKeys={new Set([rowsPerPage.toString()])}
+                onSelectionChange={(keys) => {
+                  setRowsPerPage(Number(Array.from(keys)[0]));
+                  setPage(1);
+                }}
+              >
+                <SelectItem key="10">10</SelectItem>
+                <SelectItem key="25">25</SelectItem>
+                <SelectItem key="50">50</SelectItem>
+                <SelectItem key="100">100</SelectItem>
+              </Select>
+            </div>
+            <Pagination
+              isCompact
+              showControls
+              showShadow
+              color="primary"
+              page={page}
+              total={pages}
+              onChange={setPage}
+            />
+          </Card>
+        }
+      >
+        <TableHeader>
+          <TableColumn>LEAD</TableColumn>
+          <TableColumn>CONTACT</TableColumn>
+          <TableColumn>STATUS</TableColumn>
+          <TableColumn>SOURCE</TableColumn>
+          <TableColumn>SERVICES</TableColumn>
+          <TableColumn>ASSIGNED TO</TableColumn>
+          <TableColumn>CREATED AT</TableColumn>
+          <TableColumn>ACTIONS</TableColumn>
+        </TableHeader>
+        <TableBody emptyContent="No leads found.">
+          {paginatedLeads.map((lead: Lead) => (
+            <TableRow key={lead.id} className="cursor-pointer">
+              <TableCell>
+                <div>
+                  <p className="font-semibold">{lead.name}</p>
+                  {lead.companyName && (
+                    <p className="text-xs text-default-500">
+                      {lead.companyName}
+                    </p>
+                  )}
+                </div>
+              </TableCell>
+
+              <TableCell>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs">
+                    <Mail size={12} className="text-default-400" />
+                    <span>{lead.email}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Phone size={14} className="text-default-400" />
+                  <div className="flex items-center gap-2 text-xs">
+                    <Phone size={12} className="text-default-400" />
                     <span>{lead.phone}</span>
                   </div>
                 </div>
+              </TableCell>
 
-                <div className="flex flex-wrap gap-2 mb-3">
-                  <Chip
-                    size="sm"
-                    color={getStatusColor(lead.status) as any}
-                    variant="flat"
-                  >
-                    {lead.status}
-                  </Chip>
-                  <Chip
-                    size="sm"
-                    color={getPriorityColor(lead.priority) as any}
-                    variant="dot"
-                  >
-                    {lead.priority}
-                  </Chip>
-                  <Chip size="sm" variant="bordered">
-                    {lead.source}
-                  </Chip>
-                </div>
+              <TableCell>
+                <Chip
+                  size="sm"
+                  variant="flat"
+                  color={getStatusColor(lead.status)}
+                >
+                  {lead.status}
+                </Chip>
+              </TableCell>
 
-                {lead.tags && lead.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mb-3">
-                    {lead.tags.map((tag) => (
-                      <Chip key={tag} size="sm" variant="flat">
-                        {tag}
-                      </Chip>
-                    ))}
-                  </div>
-                )}
+              <TableCell>
+                <Chip size="sm" variant="bordered">
+                  {lead.source}
+                </Chip>
+              </TableCell>
 
-                <Divider className="my-3" />
-
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="text-xs text-default-500">Value</p>
-                    <p className="font-semibold">
-                      {formatCurrency(lead.value)}
-                    </p>
-                  </div>
-                  {lead.assignedTo && (
-                    <Avatar
-                      name={lead.assignedTo.name}
-                      src={lead.assignedTo.avatar}
-                      size="sm"
-                    />
+              <TableCell>
+                <div className="flex flex-wrap gap-1">
+                  {(lead.serviceIds ?? []).length > 0 ? (
+                    <>
+                      {allServices
+                        .filter((s: Service) =>
+                          (lead.serviceIds ?? []).includes(s.id),
+                        )
+                        .slice(0, 2)
+                        .map((s: Service) => (
+                          <Chip
+                            key={s.id}
+                            size="sm"
+                            variant="flat"
+                            color="secondary"
+                          >
+                            {s.name}
+                          </Chip>
+                        ))}
+                      {(lead.serviceIds ?? []).length > 2 && (
+                        <Chip size="sm" variant="flat">
+                          +{(lead.serviceIds ?? []).length - 2}
+                        </Chip>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-default-400 text-xs">—</span>
                   )}
                 </div>
-              </CardBody>
-            </Card>
+              </TableCell>
+
+              <TableCell>
+                {lead.user ? (
+                  <UserComponent
+                    name={lead.user.name}
+                    avatarProps={{
+                      src: lead.user.avatarUrl || lead.user.avatar,
+                      size: "sm",
+                    }}
+                  />
+                ) : (
+                  <span className="text-default-400 text-sm">Unassigned</span>
+                )}
+              </TableCell>
+
+              <TableCell>
+                <div className="flex items-center gap-1 text-xs text-default-500">
+                  <Clock size={12} />
+                  <span>{formatDate(lead.createdAt)}</span>
+                </div>
+              </TableCell>
+
+              <TableCell>
+                <Button
+                  isIconOnly
+                  aria-label="view-lead"
+                  size="sm"
+                  variant="light"
+                  onPress={() => router.push(`/leads/${lead.id}`)}
+                >
+                  <Eye size={16} />
+                </Button>
+
+                {lead.assignedTo === currentUser?.id && (
+                  <>
+                    <Button
+                      isIconOnly
+                      size="sm"
+                      aria-label="edit-lead"
+                      variant="light"
+                      onPress={() => router.push(`/leads/${lead.id}?edit=true`)}
+                    >
+                      <Edit size={16} />
+                    </Button>
+                    <Dropdown>
+                      <DropdownTrigger>
+                        <Button isIconOnly size="sm" variant="light">
+                          <MoreVertical size={16} />
+                        </Button>
+                      </DropdownTrigger>
+                      <DropdownMenu aria-label="Lead actions">
+                        <DropdownItem
+                          key="email"
+                          startContent={<Mail size={16} />}
+                          onPress={() => {
+                            window.location.href = `mailto:${lead.email}`;
+                          }}
+                        >
+                          Send Email
+                        </DropdownItem>
+                        <DropdownItem
+                          key="call"
+                          startContent={<Phone size={16} />}
+                          onPress={() => {
+                            window.location.href = `tel:${lead.phone}`;
+                          }}
+                        >
+                          Schedule Call
+                        </DropdownItem>
+
+                        {lead.status === "NEW" ? (
+                          <DropdownItem
+                            key="mark-contacted"
+                            startContent={<CheckCircle size={16} />}
+                            onPress={() =>
+                              handleStatusChange(lead, "CONTACTED")
+                            }
+                          >
+                            Mark as Contacted
+                          </DropdownItem>
+                        ) : null}
+                        {lead.status === "CONTACTED" ? (
+                          <DropdownItem
+                            key="mark-qualified"
+                            startContent={<CheckCircle size={16} />}
+                            onPress={() =>
+                              handleStatusChange(lead, "QUALIFIED")
+                            }
+                          >
+                            Mark as Qualified
+                          </DropdownItem>
+                        ) : null}
+
+                        {lead.status === "QUALIFIED" ? (
+                          <DropdownItem
+                            key="mark-contacted"
+                            startContent={<CheckCircle size={16} />}
+                            onPress={() =>
+                              handleStatusChange(lead, "CONTACTED")
+                            }
+                          >
+                            Mark as Contacted
+                          </DropdownItem>
+                        ) : null}
+
+                        <DropdownItem
+                          key="convert"
+                          startContent={<TrendingUp size={16} />}
+                          onPress={() => handleConvertToDeal(lead)}
+                        >
+                          Convert to Deal
+                        </DropdownItem>
+
+                        <DropdownItem
+                          key="delete"
+                          color="danger"
+                          startContent={<Trash2 size={16} />}
+                          onPress={() => openDeleteModal(lead)}
+                        >
+                          Delete Lead
+                        </DropdownItem>
+                      </DropdownMenu>
+                    </Dropdown>
+                  </>
+                )}
+              </TableCell>
+            </TableRow>
           ))}
-        </div>
-      )}
+        </TableBody>
+      </Table>
 
-      {/* Add Lead Modal */}
-      <Modal
-        isOpen={isAddModalOpen}
-        onClose={() => {
-          setIsAddModalOpen(false);
-          resetForm();
-        }}
-        size="2xl"
-        scrollBehavior="inside"
-      >
-        <ModalContent>
-          <ModalHeader>Add New Lead</ModalHeader>
-          <ModalBody>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                label="Full Name"
-                placeholder="Enter lead name"
-                isRequired
-                value={formData.name}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, name: value })
-                }
-              />
-              <Input
-                label="Email"
-                type="email"
-                placeholder="email@example.com"
-                isRequired
-                value={formData.email}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, email: value })
-                }
-              />
-              <Input
-                label="Phone"
-                type="tel"
-                placeholder="+1 234 567 8900"
-                value={formData.phone}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, phone: value })
-                }
-              />
-              <Input
-                label="Company Name"
-                placeholder="Company name"
-                value={formData.companyName}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, companyName: value })
-                }
-              />
-              <Select
-                label="Status"
-                selectedKeys={new Set([formData.status])}
-                onSelectionChange={(keys) =>
-                  setFormData({
-                    ...formData,
-                    status: Array.from(keys)[0] as LeadStatus,
-                  })
-                }
-              >
-                <SelectItem key="NEW">New</SelectItem>
-                <SelectItem key="CONTACTED">Contacted</SelectItem>
-                <SelectItem key="QUALIFIED">Qualified</SelectItem>
-                <SelectItem key="LOST">Lost</SelectItem>
-              </Select>
-              <Select
-                label="Source"
-                placeholder="Select source"
-                selectedKeys={
-                  formData.source ? new Set([formData.source]) : new Set()
-                }
-                onSelectionChange={(keys) =>
-                  setFormData({
-                    ...formData,
-                    source: Array.from(keys)[0] as string,
-                  })
-                }
-              >
-                {sources.map((source) => (
-                  <SelectItem key={source}>{source}</SelectItem>
-                ))}
-              </Select>
-              <Select
-                label="Priority"
-                selectedKeys={new Set([formData.priority])}
-                onSelectionChange={(keys) =>
-                  setFormData({
-                    ...formData,
-                    priority: Array.from(keys)[0] as Priority,
-                  })
-                }
-              >
-                <SelectItem key="LOW">Low</SelectItem>
-                <SelectItem key="MEDIUM">Medium</SelectItem>
-                <SelectItem key="HIGH">High</SelectItem>
-              </Select>
-              <Select
-                label="Assign To"
-                placeholder="Select team member"
-                selectedKeys={
-                  formData.assignedTo
-                    ? new Set([formData.assignedTo])
-                    : new Set()
-                }
-                onSelectionChange={(keys) =>
-                  setFormData({
-                    ...formData,
-                    assignedTo: Array.from(keys)[0] as string,
-                  })
-                }
-              >
-                {teamMembers.map((member) => (
-                  <SelectItem key={member.id}>{member.name}</SelectItem>
-                ))}
-              </Select>
-              <Input
-                label="Estimated Value"
-                type="number"
-                placeholder="50000"
-                startContent={<DollarSign size={16} />}
-                value={formData.value}
-                onValueChange={(value) => setFormData({ ...formData, value })}
-              />
-            </div>
-            <Textarea
-              label="Notes"
-              placeholder="Add any additional notes..."
-              className="mt-4"
-              value={formData.notes}
-              onValueChange={(value) =>
-                setFormData({ ...formData, notes: value })
-              }
-            />
-          </ModalBody>
-          <ModalFooter>
-            <Button
-              variant="light"
-              onPress={() => {
-                setIsAddModalOpen(false);
-                resetForm();
-              }}
-            >
-              Cancel
-            </Button>
-            <Button color="primary" onPress={handleAddLead}>
-              Add Lead
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
-      {/* Edit Lead Modal */}
-      <Modal
-        isOpen={isEditModalOpen}
-        onClose={() => {
-          setIsEditModalOpen(false);
-          resetForm();
-        }}
-        size="2xl"
-        scrollBehavior="inside"
-      >
-        <ModalContent>
-          <ModalHeader>Edit Lead</ModalHeader>
-          <ModalBody>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                label="Full Name"
-                placeholder="Enter lead name"
-                isRequired
-                value={formData.name}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, name: value })
-                }
-              />
-              <Input
-                label="Email"
-                type="email"
-                placeholder="email@example.com"
-                isRequired
-                value={formData.email}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, email: value })
-                }
-              />
-              <Input
-                label="Phone"
-                type="tel"
-                placeholder="+1 234 567 8900"
-                value={formData.phone}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, phone: value })
-                }
-              />
-              <Input
-                label="Company Name"
-                placeholder="Company name"
-                value={formData.companyName}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, companyName: value })
-                }
-              />
-              <Select
-                label="Status"
-                selectedKeys={new Set([formData.status])}
-                onSelectionChange={(keys) =>
-                  setFormData({
-                    ...formData,
-                    status: Array.from(keys)[0] as LeadStatus,
-                  })
-                }
-              >
-                <SelectItem key="NEW">New</SelectItem>
-                <SelectItem key="CONTACTED">Contacted</SelectItem>
-                <SelectItem key="QUALIFIED">Qualified</SelectItem>
-                <SelectItem key="LOST">Lost</SelectItem>
-              </Select>
-              <Select
-                label="Source"
-                placeholder="Select source"
-                selectedKeys={
-                  formData.source ? new Set([formData.source]) : new Set()
-                }
-                onSelectionChange={(keys) =>
-                  setFormData({
-                    ...formData,
-                    source: Array.from(keys)[0] as string,
-                  })
-                }
-              >
-                {sources.map((source) => (
-                  <SelectItem key={source}>{source}</SelectItem>
-                ))}
-              </Select>
-              <Select
-                label="Priority"
-                selectedKeys={new Set([formData.priority])}
-                onSelectionChange={(keys) =>
-                  setFormData({
-                    ...formData,
-                    priority: Array.from(keys)[0] as Priority,
-                  })
-                }
-              >
-                <SelectItem key="LOW">Low</SelectItem>
-                <SelectItem key="MEDIUM">Medium</SelectItem>
-                <SelectItem key="HIGH">High</SelectItem>
-              </Select>
-              <Select
-                label="Assign To"
-                placeholder="Select team member"
-                selectedKeys={
-                  formData.assignedTo
-                    ? new Set([formData.assignedTo])
-                    : new Set()
-                }
-                onSelectionChange={(keys) =>
-                  setFormData({
-                    ...formData,
-                    assignedTo: Array.from(keys)[0] as string,
-                  })
-                }
-              >
-                {teamMembers.map((member) => (
-                  <SelectItem key={member.id}>{member.name}</SelectItem>
-                ))}
-              </Select>
-              <Input
-                label="Estimated Value"
-                type="number"
-                placeholder="50000"
-                startContent={<DollarSign size={16} />}
-                value={formData.value}
-                onValueChange={(value) => setFormData({ ...formData, value })}
-              />
-            </div>
-            <Textarea
-              label="Notes"
-              placeholder="Add any additional notes..."
-              className="mt-4"
-              value={formData.notes}
-              onValueChange={(value) =>
-                setFormData({ ...formData, notes: value })
-              }
-            />
-          </ModalBody>
-          <ModalFooter>
-            <Button
-              variant="light"
-              onPress={() => {
-                setIsEditModalOpen(false);
-                resetForm();
-              }}
-            >
-              Cancel
-            </Button>
-            <Button color="primary" onPress={handleEditLead}>
-              Save Changes
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
-      {/* Delete Confirmation Modal */}
+      {/* ── Delete Confirmation Modal ── */}
       <Modal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
         size="sm"
+        backdrop="blur"
       >
         <ModalContent>
           <ModalHeader>Delete Lead</ModalHeader>
@@ -1270,11 +1100,154 @@ export default function LeadsPage({
             </p>
           </ModalBody>
           <ModalFooter>
-            <Button variant="light" onPress={() => setIsDeleteModalOpen(false)}>
+            <Button
+              variant="flat"
+              radius="full"
+              onPress={() => setIsDeleteModalOpen(false)}
+            >
               Cancel
             </Button>
-            <Button color="danger" onPress={handleDeleteLead}>
+            <Button
+              color="danger"
+              radius="full"
+              onPress={handleDeleteLead}
+              isLoading={isSubmitting}
+            >
               Delete
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Bulk Delete Modal */}
+      <Modal
+        isOpen={isBulkDeleteModalOpen}
+        onClose={() => setIsBulkDeleteModalOpen(false)}
+        size="sm"
+        backdrop="blur"
+      >
+        <ModalContent>
+          <ModalHeader>Delete Selected Leads</ModalHeader>
+          <ModalBody>
+            <p>
+              Are you sure you want to delete{" "}
+              <strong>{selectedKeys.size}</strong> lead(s)? This action cannot
+              be undone.
+            </p>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              variant="flat"
+              radius="full"
+              onPress={() => setIsBulkDeleteModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              color="danger"
+              radius="full"
+              onPress={performBulkDelete}
+              isLoading={isBulkSubmitting}
+            >
+              Delete
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Bulk Assign Modal */}
+      <Modal
+        isOpen={isBulkAssignModalOpen}
+        onClose={() => setIsBulkAssignModalOpen(false)}
+        size="sm"
+        backdrop="blur"
+      >
+        <ModalContent>
+          <ModalHeader>Assign Leads</ModalHeader>
+          <ModalBody>
+            <Select
+              label="Assign To"
+              placeholder="Select user"
+              selectedKeys={
+                bulkAssignUserId ? new Set([bulkAssignUserId]) : new Set()
+              }
+              onSelectionChange={(keys) =>
+                setBulkAssignUserId(Array.from(keys)[0] as string)
+              }
+            >
+              <SelectItem key="">Select user</SelectItem>
+              <>
+                {allUsers
+                  .filter((u: User) => u.role === "SALES")
+                  .map((user: User) => (
+                    <SelectItem key={user.id}>{user.name}</SelectItem>
+                  ))}
+              </>
+            </Select>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              variant="flat"
+              radius="full"
+              onPress={() => setIsBulkAssignModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              color="primary"
+              radius="full"
+              onPress={performBulkAssign}
+              isLoading={isBulkSubmitting}
+              disabled={!bulkAssignUserId}
+            >
+              Assign
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Bulk Status Modal */}
+      <Modal
+        isOpen={isBulkStatusModalOpen}
+        onClose={() => setIsBulkStatusModalOpen(false)}
+        size="sm"
+        backdrop="blur"
+      >
+        <ModalContent>
+          <ModalHeader>Change Status</ModalHeader>
+          <ModalBody>
+            <Select
+              label="New Status"
+              placeholder="Select status"
+              selectedKeys={
+                bulkNewStatus ? new Set([bulkNewStatus]) : new Set()
+              }
+              onSelectionChange={(keys) =>
+                setBulkNewStatus(Array.from(keys)[0] as LeadStatus)
+              }
+            >
+              <SelectItem key="NEW">New</SelectItem>
+              <SelectItem key="CONTACTED">Contacted</SelectItem>
+              <SelectItem key="QUALIFIED">Qualified</SelectItem>
+              <SelectItem key="LOST">Lost</SelectItem>
+            </Select>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              variant="flat"
+              radius="full"
+              onPress={() => setIsBulkStatusModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              color="primary"
+              radius="full"
+              onPress={performBulkStatusChange}
+              isLoading={isBulkSubmitting}
+              disabled={!bulkNewStatus}
+            >
+              Change Status
             </Button>
           </ModalFooter>
         </ModalContent>

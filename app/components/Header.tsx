@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Navbar,
   NavbarBrand,
@@ -16,10 +16,6 @@ import {
   Badge,
   Avatar,
   Kbd,
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
   Listbox,
   ListboxItem,
   Chip,
@@ -48,11 +44,13 @@ import {
   CheckCircle,
   Menu,
   Home,
+  Target,
+  Handshake,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ThemeSwitcher } from "./ThemeSwitcher";
-import { getCurrentUser } from "../lib/get-current-user";
+import { useUser } from "../context/UserContext";
 
 // Types
 type UserRole = "ADMIN" | "MANAGER" | "SALES" | "SUPPORT";
@@ -89,30 +87,29 @@ interface SearchResult {
   metadata?: string;
 }
 
-interface HeaderProps {
-  user: User;
-  company: Company;
-}
-
-export default function Header({}: HeaderProps) {
+export default function Header() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [currentPath, setCurrentPath] = useState("/");
-  const user = getCurrentUser();
+  const user = useUser();
 
-  const isAdmin = user.role === "ADMIN" || user.role === "MANAGER";
+  const isAdmin = user?.role === "ADMIN" || user?.role === "MANAGER";
 
   const handleNavigate = (path: string) => {
     console.log("Navigating to:", path);
     setCurrentPath(path);
-    // In a real app, use: router.push(path)
+    // Perform real navigation
+    try {
+      void router.push(path);
+    } catch (err) {
+      console.error("Navigation error:", err);
+    }
   };
 
-  const handleLogout = () => {
-    console.log("Logging out...");
-    // Handle logout logic (clear session, redirect to login, etc.)
+  const handleLogout = async () => {
+    await fetch("/api/logout", { method: "POST" });
+    router.replace("/login");
   };
 
   // Mock company data
@@ -280,7 +277,6 @@ export default function Header({}: HeaderProps) {
 
   const handleSearchResultClick = (result: SearchResult) => {
     console.log("Search result clicked:", result);
-    setIsSearchOpen(false);
     setSearchQuery("");
 
     handleNavigate(`/${result.type}s/${result.id}`);
@@ -290,14 +286,14 @@ export default function Header({}: HeaderProps) {
     <>
       <Navbar
         maxWidth="full"
-        className="border-b border-divider"
+        className="border-b border-divider bg-linear-to-r from-default/30 to-primary/50"
         classNames={{
           wrapper: "px-4 sm:px-6",
         }}
       >
         <NavbarContent justify="start">
           <NavbarBrand className="gap-4">
-            <Dropdown>
+            <Dropdown radius="sm">
               <DropdownTrigger>
                 <div className="flex items-center gap-3 cursor-pointer">
                   {company.logoUrl ? (
@@ -326,6 +322,7 @@ export default function Header({}: HeaderProps) {
                 <DropdownSection title="Navigation">
                   <DropdownItem
                     key="dashboard"
+                    as={Link} // Forces Next.js routing logic
                     href="/dashboard"
                     startContent={<Home size={18} />}
                   >
@@ -333,15 +330,17 @@ export default function Header({}: HeaderProps) {
                   </DropdownItem>
                   <DropdownItem
                     key="leads"
+                    as={Link} // Forces Next.js routing logic
                     href="/leads"
-                    startContent={<Package size={18} />}
+                    startContent={<Target size={18} />}
                   >
                     Leads
                   </DropdownItem>
                   <DropdownItem
                     key="deals"
+                    as={Link}
                     href="/deals"
-                    startContent={<Package size={18} />}
+                    startContent={<Handshake size={18} />}
                   >
                     Deals
                   </DropdownItem>
@@ -404,45 +403,105 @@ export default function Header({}: HeaderProps) {
           justify="center"
           className="hidden lg:flex flex-1 max-w-2xl"
         >
-          <NavbarItem className="w-full">
+          <NavbarItem className="w-full relative">
             <Input
               classNames={{
                 base: "w-full",
-                inputWrapper: "bg-default-100",
+                inputWrapper: "border border-default bg-background",
               }}
+              radius="sm"
               placeholder="Search leads, deals, customers, invoices..."
-              size="sm"
+              size="md"
               startContent={<Search size={18} className="text-default-400" />}
-              endContent={
-                <div className="flex items-center gap-1">
-                  <Kbd keys={["command"]}>K</Kbd>
-                </div>
-              }
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              onClick={() => setIsSearchOpen(true)}
             />
+
+            {/* Inline dropdown for desktop */}
+            {searchQuery.length > 0 && (
+              <div className="absolute left-0 right-0 mt-2 z-50 max-h-80 overflow-auto bg-default-50 border border-divider rounded-lg shadow-lg p-2">
+                {searchQuery.length < 2 ? (
+                  <div className="py-4 text-center text-default-500">
+                    <Search size={36} className="mx-auto mb-2 opacity-30" />
+                    <p className="text-sm">Start typing to search...</p>
+                    <div className="flex flex-wrap justify-center gap-2 mt-3">
+                      <Chip size="sm" variant="flat">
+                        Leads
+                      </Chip>
+                      <Chip size="sm" variant="flat">
+                        Deals
+                      </Chip>
+                      <Chip size="sm" variant="flat">
+                        Customers
+                      </Chip>
+                      <Chip size="sm" variant="flat">
+                        Invoices
+                      </Chip>
+                    </div>
+                  </div>
+                ) : searchResults.length === 0 ? (
+                  <div className="py-4 text-center text-default-500">
+                    <Search size={36} className="mx-auto mb-2 opacity-30" />
+                    <p className="text-sm">
+                      No results found for "{searchQuery}"
+                    </p>
+                  </div>
+                ) : (
+                  <Listbox
+                    aria-label="Search results"
+                    onAction={(key) => {
+                      const result = searchResults.find((r) => r.id === key);
+                      if (result) handleSearchResultClick(result);
+                    }}
+                  >
+                    {searchResults.map((result) => (
+                      <ListboxItem
+                        key={result.id}
+                        textValue={result.title}
+                        startContent={
+                          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-default-100">
+                            {getSearchTypeIcon(result.type)}
+                          </div>
+                        }
+                        endContent={
+                          <Chip
+                            size="sm"
+                            variant="flat"
+                            color={getSearchTypeColor(result.type) as any}
+                          >
+                            {result.type}
+                          </Chip>
+                        }
+                      >
+                        <div>
+                          <p className="font-semibold">{result.title}</p>
+                          <p className="text-sm text-default-500">
+                            {result.subtitle}
+                          </p>
+                          {result.metadata && (
+                            <p className="text-xs text-default-400 mt-1">
+                              {result.metadata}
+                            </p>
+                          )}
+                        </div>
+                      </ListboxItem>
+                    ))}
+                  </Listbox>
+                )}
+              </div>
+            )}
           </NavbarItem>
         </NavbarContent>
 
         {/* Right Side - Actions */}
         <NavbarContent justify="end" className="gap-2">
           {/* Mobile Search */}
-          <NavbarItem className="lg:hidden">
-            <Button
-              isIconOnly
-              variant="light"
-              onPress={() => setIsSearchOpen(true)}
-            >
-              <Search size={20} />
-            </Button>
-          </NavbarItem>
 
           <ThemeSwitcher />
 
           {/* Quick Add Dropdown */}
           <NavbarItem>
-            <Dropdown>
+            <Dropdown radius="sm">
               <DropdownTrigger>
                 <Button
                   color="primary"
@@ -460,6 +519,24 @@ export default function Header({}: HeaderProps) {
                 onAction={(key) => handleQuickAdd(key as string)}
               >
                 <DropdownSection title="Business">
+                  <DropdownItem
+                    key="lead"
+                    startContent={<Plus size={18} />}
+                    description="Create a new Lead"
+                    href="/leads/new"
+                  >
+                    Add Lead
+                  </DropdownItem>
+
+                  <DropdownItem
+                    key="deal"
+                    startContent={<Plus size={18} />}
+                    href="/deals"
+                    description="Create a new deal"
+                  >
+                    Create Deal
+                  </DropdownItem>
+
                   <DropdownItem
                     key="service"
                     startContent={<Package size={18} />}
@@ -588,13 +665,10 @@ export default function Header({}: HeaderProps) {
           <NavbarItem>
             <Dropdown placement="bottom-end">
               <DropdownTrigger>
-                <Button
-                  variant="light"
-                  className="gap-2 h-auto p-1 pr-2 data-[hover=true]:bg-default-100"
-                >
+                <Button variant="light" className="gap-2 h-auto p-1 pr-2 ">
                   <Avatar
-                    name={user.name}
-                    src={user.avatarUrl}
+                    name={user?.name}
+                    src={user?.avatarUrl}
                     size="sm"
                     className="w-8 h-8"
                   />
@@ -611,17 +685,24 @@ export default function Header({}: HeaderProps) {
                     isReadOnly
                   >
                     <div className="flex items-center gap-3">
-                      <Avatar name={user.name} src={user.avatarUrl} size="md" />
+                      <Avatar
+                        name={user?.name}
+                        src={user?.avatarUrl}
+                        size="md"
+                        color="primary"
+                      />
                       <div>
-                        <p className="font-semibold">{user.name}</p>
-                        <p className="text-xs text-default-500">{user.email}</p>
+                        <p className="font-semibold">{user?.name}</p>
+                        <p className="text-xs text-default-500">
+                          {user?.email}
+                        </p>
                         <Chip
                           size="sm"
                           variant="flat"
-                          color={getRoleBadgeColor(user.role) as any}
+                          color={getRoleBadgeColor(user?.role) as any}
                           className="mt-1"
                         >
-                          {user.role}
+                          {user?.role}
                         </Chip>
                       </div>
                     </div>
@@ -632,6 +713,7 @@ export default function Header({}: HeaderProps) {
                   <DropdownItem
                     key="my-profile"
                     startContent={<User size={18} />}
+                    description="View and edit your profile information"
                   >
                     My Profile
                   </DropdownItem>
@@ -643,6 +725,7 @@ export default function Header({}: HeaderProps) {
                     color="danger"
                     startContent={<LogOut size={18} />}
                     onPress={handleLogout}
+                    description="Sign out of your account"
                   >
                     Logout
                   </DropdownItem>
@@ -653,78 +736,50 @@ export default function Header({}: HeaderProps) {
         </NavbarContent>
       </Navbar>
 
-      {/* Global Search Modal */}
-      <Modal
-        isOpen={isSearchOpen}
-        onClose={() => {
-          setIsSearchOpen(false);
-          setSearchQuery("");
-        }}
-        size="2xl"
-        isDismissable={false}
-        placement="top"
-        classNames={{
-          base: "mt-20 p-5",
-        }}
-      >
-        <ModalContent>
-          <ModalHeader className="flex flex-col gap-1 pb-2">
+      {/* Mobile search panel (small screens) */}
+      {searchQuery.length > 0 && (
+        <div className="lg:hidden fixed top-16 left-0 right-0 z-50 p-4 bg-default-50 border-t border-divider">
+          <div className="max-w-3xl mx-auto">
             <Input
               autoFocus
               placeholder="Search leads, deals, customers, invoices..."
-              size="lg"
-              variant="bordered"
-              startContent={<Search size={20} className="text-default-400" />}
+              size="md"
+              startContent={<Search size={18} className="text-default-400" />}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              classNames={{
-                input: "text-lg",
-              }}
+              classNames={{ input: "text-base" }}
             />
-          </ModalHeader>
-          <ModalBody className="pb-6">
-            {searchQuery.length < 2 ? (
-              <div className="py-8 text-center text-default-500">
-                <Search size={48} className="mx-auto mb-3 opacity-30" />
-                <p className="text-sm">Start typing to search...</p>
-                <div className="flex flex-wrap justify-center gap-2 mt-4">
-                  <Chip size="sm" variant="flat">
-                    Leads
-                  </Chip>
-                  <Chip size="sm" variant="flat">
-                    Deals
-                  </Chip>
-                  <Chip size="sm" variant="flat">
-                    Customers
-                  </Chip>
-                  <Chip size="sm" variant="flat">
-                    Invoices
-                  </Chip>
+
+            <div className="mt-2 bg-default-50">
+              {searchQuery.length < 2 ? (
+                <div className="py-4 text-center text-default-500">
+                  <Search size={36} className="mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">Start typing to search...</p>
                 </div>
-              </div>
-            ) : searchResults.length === 0 ? (
-              <div className="py-8 text-center text-default-500">
-                <Search size={48} className="mx-auto mb-3 opacity-30" />
-                <p className="text-sm">No results found for "{searchQuery}"</p>
-              </div>
-            ) : (
-              <Listbox
-                aria-label="Search results"
-                onAction={(key) => {
-                  const result = searchResults.find((r) => r.id === key);
-                  if (result) handleSearchResultClick(result);
-                }}
-              >
-                {searchResults.map((result) => (
-                  <ListboxItem
-                    key={result.id}
-                    textValue={result.title}
-                    startContent={
+              ) : searchResults.length === 0 ? (
+                <div className="py-4 text-center text-default-500">
+                  <Search size={36} className="mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">
+                    No results found for "{searchQuery}"
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-divider rounded">
+                  {searchResults.map((result) => (
+                    <button
+                      key={result.id}
+                      onClick={() => handleSearchResultClick(result)}
+                      className="w-full text-left py-3 px-2 hover:bg-default-100 flex items-center gap-3"
+                    >
                       <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-default-100">
                         {getSearchTypeIcon(result.type)}
                       </div>
-                    }
-                    endContent={
+                      <div className="flex-1">
+                        <p className="font-semibold">{result.title}</p>
+                        <p className="text-sm text-default-500">
+                          {result.subtitle}
+                        </p>
+                      </div>
                       <Chip
                         size="sm"
                         variant="flat"
@@ -732,26 +787,14 @@ export default function Header({}: HeaderProps) {
                       >
                         {result.type}
                       </Chip>
-                    }
-                  >
-                    <div>
-                      <p className="font-semibold">{result.title}</p>
-                      <p className="text-sm text-default-500">
-                        {result.subtitle}
-                      </p>
-                      {result.metadata && (
-                        <p className="text-xs text-default-400 mt-1">
-                          {result.metadata}
-                        </p>
-                      )}
-                    </div>
-                  </ListboxItem>
-                ))}
-              </Listbox>
-            )}
-          </ModalBody>
-        </ModalContent>
-      </Modal>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

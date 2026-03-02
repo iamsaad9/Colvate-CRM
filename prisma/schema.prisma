@@ -30,23 +30,27 @@ model Company {
 }
 
 model User {
-  id           String   @id @default(uuid())
+  id           String    @id @default(uuid())
   companyId    String
   name         String
-  email        String   @unique
+  email        String    @unique
   passwordHash String
-  role         UserRole @default(SALES)
+  role         UserRole  @default(SALES)
   avatarUrl    String?
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  isActive     Boolean   @default(true)
+  reportsToId  String?   // The ID of the manager
+  manager      User?     @relation("UserReporting", fields: [reportsToId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  subordinates User[]    @relation("UserReporting")
 
-  company   Company  @relation(fields: [companyId], references: [id])
-  customers Customer[]
-  leads     Lead[]
-  deals     Deal[]
-  tasks     Task[]
-  notes     Note[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  company      Company   @relation(fields: [companyId], references: [id])
+  customers    Customer[]
+  leads        Lead[]
+  deals        Deal[]
+  tasks        Task[]
+  notes        Note[]
 }
 
 model Customer {
@@ -62,12 +66,13 @@ model Customer {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
-  company Company @relation(fields: [companyId], references: [id])
-  user    User?   @relation(fields: [assignedTo], references: [id])
+  company  Company @relation(fields: [companyId], references: [id])
+  user     User?   @relation(fields: [assignedTo], references: [id])
 
   deals    Deal[]
   invoices Invoice[]
 }
+
 
 model Lead {
   id         String     @id @default(uuid())
@@ -81,14 +86,16 @@ model Lead {
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
 
-  company Company @relation(fields: [companyId], references: [id])
-  user    User?   @relation(fields: [assignedTo], references: [id])
+  company   Company   @relation(fields: [companyId], references: [id])
+  user      User?     @relation(fields: [assignedTo], references: [id])
+  services  Service[]   
 }
 
 model Deal {
   id                String     @id @default(uuid())
   companyId         String
-  customerId        String
+  customerId        String?
+  serviceId         String     
   title             String
   value             Decimal
   stage             DealStage  @default(PROSPECT)
@@ -98,9 +105,11 @@ model Deal {
   updatedAt         DateTime   @updatedAt
 
   company  Company  @relation(fields: [companyId], references: [id])
-  customer Customer @relation(fields: [customerId], references: [id])
+  customer Customer? @relation(fields: [customerId], references: [id])
+  service  Service  @relation(fields: [serviceId], references: [id])
   user     User?    @relation(fields: [assignedTo], references: [id])
 }
+
 
 model Service {
   id          String   @id @default(uuid())
@@ -113,7 +122,11 @@ model Service {
   updatedAt   DateTime @updatedAt
 
   company Company @relation(fields: [companyId], references: [id])
+
+  leads   Lead[]   // many-to-many
+  deals   Deal[]   // one-to-many
 }
+
 
 model Task {
   id           String      @id @default(uuid())

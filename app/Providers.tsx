@@ -2,6 +2,7 @@
 import React from "react";
 import { HeroUIProvider } from "@heroui/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
+import { ReactQueryProvider } from "@/app/Providers/QueryClientProvider";
 
 const Providers = ({
   children,
@@ -11,7 +12,7 @@ const Providers = ({
   return (
     <HeroUIProvider>
       <NextThemesProvider attribute="class" defaultTheme="system" enableSystem>
-        {children}
+        <ReactQueryProvider>{children}</ReactQueryProvider>
       </NextThemesProvider>
     </HeroUIProvider>
   );

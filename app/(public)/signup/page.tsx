@@ -68,25 +68,6 @@ export default function SignUp() {
         <div className="w-full max-w-md relative z-10 animate-fade-in-left animation-delay-300">
           {/* Header */}
           <div className="mb-10">
-            <a
-              href="#"
-              className="inline-flex items-center gap-2 text-gray-600 text-sm font-medium mb-6 hover:text-indigo-600 transition-all hover:-translate-x-1"
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
-              Back to home
-            </a>
             <h2 className="font-['Playfair_Display'] text-4xl font-bold text-gray-900 mb-2 tracking-tight">
               Get started
             </h2>

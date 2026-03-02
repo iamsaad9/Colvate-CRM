@@ -60,23 +60,20 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import { useUser } from "@/app/context/UserContext";
+import { useRouter } from "next/navigation";
 
 // Types based on Prisma schema
-type UserRole = "ADMIN" | "MANAGER" | "SALES" | "SUPPORT";
 type LeadStatus = "NEW" | "CONTACTED" | "QUALIFIED" | "LOST";
 type DealStage = "PROSPECT" | "NEGOTIATION" | "WON" | "LOST";
 type TaskStatus = "PENDING" | "IN_PROGRESS" | "DONE";
 type Priority = "LOW" | "MEDIUM" | "HIGH";
 
-interface DashboardProps {
-  userRole: UserRole;
-  userId: string;
-  companyId: string;
-}
-
-export default function Dashboard({ userRole }: DashboardProps) {
+export default function Dashboard() {
   const [timeRange, setTimeRange] = useState("month");
   const [selectedTab, setSelectedTab] = useState("overview");
+  const router = useRouter();
+  const user = useUser();
 
   // Mock data - replace with actual API calls
   const kpiData = {
@@ -277,8 +274,8 @@ export default function Dashboard({ userRole }: DashboardProps) {
     }).format(value);
   };
 
-  // const isAdmin = userRole === "ADMIN" || userRole === "MANAGER";
-  const isAdmin = true;
+  const isAdmin = user?.role === "ADMIN" || user?.role === "MANAGER";
+  // const isAdmin = true;
 
   return (
     <div className="p-6 max-w-[1600px] mx-auto space-y-6">
@@ -293,37 +290,11 @@ export default function Dashboard({ userRole }: DashboardProps) {
 
         {/* Quick Actions */}
         <div className="flex gap-2">
-          <Button
-            color="primary"
-            variant="flat"
-            radius="full"
-            startContent={<Plus size={18} />}
-            onPress={() => {}}
-          >
-            Add Lead
-          </Button>
-          <Button
-            color="primary"
-            variant="flat"
-            radius="full"
-            startContent={<Package size={18} />}
-            onPress={() => {}}
-          >
-            Add Service
-          </Button>
-          <Button
-            color="primary"
-            variant="flat"
-            radius="full"
-            startContent={<FileText size={18} />}
-            onPress={() => {}}
-          >
-            Create Invoice
-          </Button>
           {isAdmin && (
             <Button
               color="primary"
               variant="flat"
+              radius="full"
               startContent={<UserPlus size={18} />}
               onPress={() => {}}
             >
@@ -337,11 +308,11 @@ export default function Dashboard({ userRole }: DashboardProps) {
               </Button>
             </DropdownTrigger>
             <DropdownMenu>
-              <DropdownItem startContent={<Download size={16} />}>
+              <DropdownItem
+                key={"export-data"}
+                startContent={<Download size={16} />}
+              >
                 Export Data
-              </DropdownItem>
-              <DropdownItem startContent={<Filter size={16} />}>
-                Advanced Filters
               </DropdownItem>
             </DropdownMenu>
           </Dropdown>

@@ -14,7 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="flex flex-col">
+      <body className="flex flex-col h-full w-full">
         <Providers>{children}</Providers>
       </body>
     </html>
