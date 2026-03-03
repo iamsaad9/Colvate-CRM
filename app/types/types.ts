@@ -25,7 +25,7 @@ export interface Deal {
   id: string;
   companyId: string;
   customerId: string;
-  serviceId: string;
+  services: Service[];
   title: string;
   value: number;
   stage: DealStage;
@@ -57,7 +57,7 @@ export interface Lead {
   createdAt: string;
   companyName?: string;
   value?: number;
-  serviceIds?: string[];
+  services?: Service[];
   user?: {
     id: string;
     name: string;
@@ -71,6 +71,24 @@ export interface Lead {
 export interface Service {
   id: string;
   name: string;
+  description: string;
   price: number;
   isActive: boolean;
+}
+
+// ─── Customers ──────────────────────────────────────────────────────────────────
+export type CustomerStatus = "ACTIVE" | "INACTIVE" | "PROSPECT";
+
+export interface Customer {
+  id: string;
+  companyId: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  companyName: string | null;
+  status: CustomerStatus;
+  source: string | null;
+  assignedTo: string | null;
+  createdAt: Date;
+  updatedAt: Date;
 }

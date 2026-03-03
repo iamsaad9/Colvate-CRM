@@ -25,6 +25,7 @@ export async function GET(
       id: id,
       companyId: companyId,
     },
+    include: { services: true, user: true },
   });
 
   if (!deal) {
@@ -67,7 +68,15 @@ export async function PUT(
         id: { in: ids },
         companyId: companyId as string,
       },
-      data: validData,
+      data: {
+        ...validData,
+        services: body.serviceIds
+          ? {
+              set: body.serviceIds.map((sId: string) => ({ id: sId })),
+            }
+          : undefined,
+        serviceIds: undefined,
+      },
     });
 
     return NextResponse.json({
@@ -122,7 +131,7 @@ export async function PATCH(
   try {
     const { id: routeId } = await params;
     const body = await req.json();
-    const { stage } = body;
+    const { stage, serviceIds } = body;
     const { searchParams } = new URL(req.url);
     const companyId = searchParams.get("companyId");
 
@@ -137,6 +146,11 @@ export async function PATCH(
 
     const updateData: any = {};
     if (stage !== undefined) updateData.stage = stage;
+    if (serviceIds !== undefined) {
+      updateData.services = {
+        set: serviceIds.map((id: string) => ({ id })),
+      };
+    }
 
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
@@ -145,15 +159,19 @@ export async function PATCH(
       );
     }
 
-    const result = await prisma.lead.updateMany({
-      where: {
-        id: { in: ids },
-        companyId: companyId,
-      },
-      data: updateData,
-    });
+    const results = await Promise.all(
+      ids.map((id) =>
+        prisma.deal.update({
+          where: {
+            id,
+            companyId: companyId, // Security check
+          },
+          data: updateData,
+        }),
+      ),
+    );
 
-    return NextResponse.json(result);
+    return NextResponse.json({ count: results.length });
   } catch (error) {
     console.error("PATCH_DEAL_ERROR", error);
     return NextResponse.json(

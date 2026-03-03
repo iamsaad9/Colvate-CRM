@@ -1,6 +1,5 @@
 "use client";
 import {
-  Avatar,
   Button,
   Card,
   CardBody,
@@ -19,7 +18,6 @@ import {
   Select,
   SelectItem,
   Skeleton,
-  Spinner,
   Table,
   TableBody,
   TableCell,
@@ -34,7 +32,6 @@ import {
   Download,
   Edit,
   Eye,
-  Grid,
   List,
   Mail,
   MoreVertical,
@@ -116,8 +113,9 @@ export default function LeadsPage() {
   );
 
   useEffect(() => {
+    console.log("Leads data updated:", allLeads);
     refetchLeads();
-  }, [allLeads.length, refetchLeads]);
+  }, [allLeads, refetchLeads]);
 
   // Filters ──────────────────────────────────────────────
   const [statusFilter, setStatusFilter] = useState<Set<string>>(
@@ -162,6 +160,17 @@ export default function LeadsPage() {
     //   filtered = filtered.filter((l) => l.assignedTo === currentUser?.id);
     // }
 
+    filtered = filtered.filter((l) => {
+      if (assignedFilter.has("all")) return true;
+
+      const isUnassigned = !l.assignedTo && assignedFilter.has("unassigned");
+      const isMe = l.assignedTo === currentUser?.id && assignedFilter.has("me");
+
+      const isSpecificUser = l.assignedTo && assignedFilter.has(l.assignedTo);
+
+      return isUnassigned || isMe || isSpecificUser;
+    });
+
     if (searchValue) {
       const q = searchValue.toLowerCase();
       filtered = filtered.filter(
@@ -180,19 +189,9 @@ export default function LeadsPage() {
       filtered = filtered.filter((l) => l.source && sourceFilter.has(l.source));
     }
 
-    if (assignedFilter.has("unassigned")) {
-      filtered = filtered.filter(
-        (l) => !l.assignedTo || assignedFilter.has(l.assignedTo),
-      );
-    } else if (!assignedFilter.has("all")) {
-      filtered = filtered.filter(
-        (l) => l.assignedTo && assignedFilter.has(l.assignedTo),
-      );
-    }
-
     if (!servicesFilter.has("all")) {
       filtered = filtered.filter((l) =>
-        (l.serviceIds ?? []).some((id) => servicesFilter.has(id)),
+        (l.services ?? []).some((id) => servicesFilter.has(id)),
       );
     }
 
@@ -215,6 +214,7 @@ export default function LeadsPage() {
     assignedFilter,
     servicesFilter,
     dateRange,
+    currentUser?.id,
   ]);
 
   const pages = Math.max(1, Math.ceil(filteredLeads.length / rowsPerPage));
@@ -455,7 +455,7 @@ export default function LeadsPage() {
 
   if (leadsLoading || allUserLoading || servicesLoading) {
     return (
-      <div className="flex flex-col items-center max-w-[1600px] gap-5 mx-auto justify-center py-20 overflow-y-hidden  flex-1">
+      <div className="flex flex-col items-center max-w-[1600px] gap-5 p-5 mx-auto justify-center py-20 overflow-y-hidden  flex-1">
         <div className="w-full flex gap-10">
           <Skeleton className="w-full h-24 rounded-md" />
           <Skeleton className="w-full h-24 rounded-md" />
@@ -923,27 +923,22 @@ export default function LeadsPage() {
               </TableCell>
 
               <TableCell>
-                <div className="flex flex-wrap gap-1">
-                  {(lead.serviceIds ?? []).length > 0 ? (
+                <div className="flex flex-col flex-wrap gap-1">
+                  {(lead.services ?? []).length > 0 && lead.services ? (
                     <>
-                      {allServices
-                        .filter((s: Service) =>
-                          (lead.serviceIds ?? []).includes(s.id),
-                        )
-                        .slice(0, 2)
-                        .map((s: Service) => (
-                          <Chip
-                            key={s.id}
-                            size="sm"
-                            variant="flat"
-                            color="secondary"
-                          >
-                            {s.name}
-                          </Chip>
-                        ))}
-                      {(lead.serviceIds ?? []).length > 2 && (
+                      {lead.services.slice(0, 2).map((s: Service) => (
+                        <Chip
+                          key={s.id}
+                          size="sm"
+                          variant="flat"
+                          color="secondary"
+                        >
+                          {s.name}
+                        </Chip>
+                      ))}
+                      {lead.services.length > 2 && (
                         <Chip size="sm" variant="flat">
-                          +{(lead.serviceIds ?? []).length - 2}
+                          +{lead.services.length - 2}
                         </Chip>
                       )}
                     </>
@@ -992,7 +987,7 @@ export default function LeadsPage() {
                       size="sm"
                       aria-label="edit-lead"
                       variant="light"
-                      onPress={() => router.push(`/leads/${lead.id}?edit=true`)}
+                      onPress={() => router.push(`/leads/${lead.id}/edit`)}
                     >
                       <Edit size={16} />
                     </Button>

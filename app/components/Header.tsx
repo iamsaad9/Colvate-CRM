@@ -523,15 +523,17 @@ export default function Header() {
                     key="lead"
                     startContent={<Plus size={18} />}
                     description="Create a new Lead"
+                    as={Link}
                     href="/leads/new"
                   >
-                    Add Lead
+                    Create Lead
                   </DropdownItem>
 
                   <DropdownItem
                     key="deal"
                     startContent={<Plus size={18} />}
-                    href="/deals"
+                    as={Link}
+                    href="/deals/new"
                     description="Create a new deal"
                   >
                     Create Deal
@@ -541,6 +543,8 @@ export default function Header() {
                     key="service"
                     startContent={<Package size={18} />}
                     description="Add a new service"
+                    as={Link}
+                    href="/company-services/new"
                   >
                     Add Service
                   </DropdownItem>

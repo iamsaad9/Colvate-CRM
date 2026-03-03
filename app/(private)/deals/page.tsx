@@ -122,6 +122,39 @@ export default function DealsPage() {
     { id: "5", name: "Enterprise Corp" },
   ];
 
+  const handleMultiSelectToggle = (
+    nextKeys: Set<string>, // The set AFTER the click
+    currentKeys: Set<string>, // The set BEFORE the click
+    setter: (s: Set<string>) => void,
+  ) => {
+    // Find what was just clicked
+    const lastClicked = Array.from(nextKeys).find(
+      (key) => !currentKeys.has(key),
+    );
+
+    // 1. If nothing was added (something was removed), just update
+    if (!lastClicked) {
+      // If we removed the last item, default back to "all"
+      if (nextKeys.size === 0) {
+        setter(new Set(["all"]));
+      } else {
+        setter(nextKeys);
+      }
+      return;
+    }
+
+    // 2. If "all" was just clicked, clear everything else
+    if (lastClicked === "all") {
+      setter(new Set(["all"]));
+      return;
+    }
+
+    // 3. If any other filter was clicked, remove "all"
+    const updated = new Set(nextKeys);
+    updated.delete("all");
+    setter(updated);
+  };
+
   useEffect(() => {
     console.log("Fetched Deals: ", allDeals);
     refetchDeals();
@@ -129,24 +162,29 @@ export default function DealsPage() {
 
   // Filtered data
   const filteredDeals = useMemo(() => {
-    let filtered = [...allDeals];
+    let filtered: Deal[] = allDeals;
+
+    filtered = filtered.filter((l) => {
+      if (assignedFilter.has("all")) return true;
+
+      const isUnassigned = !l.assignedTo && assignedFilter.has("unassigned");
+      const isMe = l.assignedTo === currentUser?.id && assignedFilter.has("me");
+
+      const isSpecificUser = l.assignedTo && assignedFilter.has(l.assignedTo);
+
+      return isUnassigned || isMe || isSpecificUser;
+    });
 
     if (searchValue) {
       filtered = filtered.filter(
         (deal) =>
           deal.title.toLowerCase().includes(searchValue.toLowerCase()) ||
-          deal.customer.name.toLowerCase().includes(searchValue.toLowerCase()),
+          deal.customerId.toLowerCase().includes(searchValue.toLowerCase()),
       );
     }
 
     if (!stageFilter.has("all")) {
       filtered = filtered.filter((deal) => stageFilter.has(deal.stage));
-    }
-
-    if (!assignedFilter.has("all")) {
-      filtered = filtered.filter(
-        (deal) => deal.assignedTo && assignedFilter.has(deal.assignedTo.id),
-      );
     }
 
     if (valueFilter !== "all") {
@@ -160,7 +198,14 @@ export default function DealsPage() {
     }
 
     return filtered;
-  }, [allDeals, searchValue, stageFilter, assignedFilter, valueFilter]);
+  }, [
+    allDeals,
+    searchValue,
+    stageFilter,
+    assignedFilter,
+    valueFilter,
+    currentUser?.id,
+  ]);
 
   const pages = Math.ceil(filteredDeals.length / rowsPerPage);
   const paginatedDeals = useMemo(() => {
@@ -273,6 +318,7 @@ export default function DealsPage() {
     setStageFilter(new Set(["all"]));
     setAssignedFilter(new Set(["all"]));
     setValueFilter("all");
+    setIsFilterOpen(false);
   };
 
   const activeFiltersCount = useMemo(() => {
@@ -321,7 +367,7 @@ export default function DealsPage() {
 
   if (dealsLoading || allUserLoading) {
     return (
-      <div className="flex flex-col items-center max-w-[1600px] gap-5 mx-auto justify-center py-20 overflow-y-hidden  flex-1">
+      <div className="flex flex-col items-center max-w-[1600px] gap-5 p-5 mx-auto justify-center py-20 overflow-y-hidden  flex-1">
         <div className="w-full flex gap-10">
           <Skeleton className="w-full h-24 rounded-md" />
           <Skeleton className="w-full h-24 rounded-md" />
@@ -513,6 +559,7 @@ export default function DealsPage() {
                   onSelectionChange={(keys) =>
                     handleMultiSelectToggle(
                       keys as Set<string>,
+                      assignedFilter,
                       setAssignedFilter,
                     )
                   }
@@ -662,20 +709,11 @@ export default function DealsPage() {
               <TableCell>
                 <div>
                   <p className="font-semibold">{deal.title}</p>
-                  {deal.tags && (
-                    <div className="flex gap-1 mt-1">
-                      {deal.tags.map((tag) => (
-                        <Chip key={tag} size="sm" variant="flat">
-                          {tag}
-                        </Chip>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </TableCell>
               <TableCell>
                 <div>
-                  <p className="font-medium">{deal.customerId}</p>
+                  <p className="">{deal.customerId || "Anonymous Customer"}</p>
                 </div>
               </TableCell>
               <TableCell>
@@ -687,7 +725,15 @@ export default function DealsPage() {
                 <Chip
                   size="sm"
                   variant="flat"
-                  color={getStageColor(deal.stage) as any}
+                  color={
+                    getStageColor(deal.stage) as
+                      | "primary"
+                      | "warning"
+                      | "success"
+                      | "danger"
+                      | "default"
+                      | "secondary"
+                  }
                 >
                   {deal.stage}
                 </Chip>
@@ -696,7 +742,7 @@ export default function DealsPage() {
               <TableCell>
                 <div className="flex items-center gap-1 text-sm">
                   <Calendar size={14} className="text-default-400" />
-                  <span>{formatDate(deal.expectedCloseDate)}</span>
+                  <span>{formatDate(deal.expectedCloseDate || "")}</span>
                 </div>
               </TableCell>
               <TableCell>
@@ -729,7 +775,7 @@ export default function DealsPage() {
                       size="sm"
                       aria-label="edit-lead"
                       variant="light"
-                      onPress={() => router.push(`/deals/${deal.id}?edit=true`)}
+                      onPress={() => router.push(`/deals/${deal.id}/edit`)}
                     >
                       <Edit size={16} />
                     </Button>
@@ -969,16 +1015,7 @@ export default function DealsPage() {
                   setFormData({ ...formData, expectedCloseDate: value })
                 }
               />
-              <Input
-                label="Probability (%)"
-                type="number"
-                min="0"
-                max="100"
-                value={formData.probability}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, probability: value })
-                }
-              />
+
               <Select
                 label="Assign To"
                 className="md:col-span-2"
@@ -999,14 +1036,6 @@ export default function DealsPage() {
                 ))}
               </Select>
             </div>
-            <Textarea
-              label="Notes"
-              className="mt-4"
-              value={formData.notes}
-              onValueChange={(value) =>
-                setFormData({ ...formData, notes: value })
-              }
-            />
           </ModalBody>
           <ModalFooter>
             <Button

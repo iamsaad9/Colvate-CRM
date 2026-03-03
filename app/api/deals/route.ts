@@ -18,14 +18,14 @@ export async function GET(req: Request) {
     const deals = await prisma.deal.findMany({
       where: { companyId: companyId },
       orderBy: { createdAt: "desc" },
-      include: { user: true },
+      include: { services: true, user: true },
     });
 
     console.log("Fetched leads for companyId:", companyId, deals);
     return NextResponse.json(deals);
   } catch {
     return NextResponse.json(
-      { error: "Failed to fetch leads" },
+      { error: "Failed to fetch deals" },
       { status: 500 },
     );
   }
@@ -47,15 +47,16 @@ export async function POST(req: Request) {
         title: body.title,
         value: body.value,
         stage: body.stage,
-        expectedCloseDate: body.expectedCloseDate
-          ? new Date(body.expectedCloseDate)
-          : null,
+        expectedCloseDate: formattedDate,
         companyId: body.companyId,
-        serviceId: body.serviceId,
-
-        // CHANGE: Only include these if they have a value, otherwise use undefined
-        customerId: body.customerId || undefined,
-        assignedTo: body.assignedTo || undefined,
+        customerId: body.customerId || null,
+        assignedTo: body.assignedTo || null,
+        services:
+          body.serviceIds && body.serviceIds.length > 0
+            ? {
+                connect: body.serviceIds.map((id: string) => ({ id })),
+              }
+            : undefined,
       },
     });
 

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { User } from "@/app/types/types";
+import { Customer } from "@/app/types/types";
 
-export function useCustomers<T = User[]>(companyId: string) {
+export function useCustomers<T = Customer[]>(companyId: string) {
   return useQuery<T>({
     queryKey: ["customers", companyId],
     queryFn: async () => {

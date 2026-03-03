@@ -95,7 +95,6 @@ model Deal {
   id                String     @id @default(uuid())
   companyId         String
   customerId        String?
-  serviceId         String     
   title             String
   value             Decimal
   stage             DealStage  @default(PROSPECT)
@@ -106,7 +105,7 @@ model Deal {
 
   company  Company  @relation(fields: [companyId], references: [id])
   customer Customer? @relation(fields: [customerId], references: [id])
-  service  Service  @relation(fields: [serviceId], references: [id])
+  services  Service[]
   user     User?    @relation(fields: [assignedTo], references: [id])
 }
 

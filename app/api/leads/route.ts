@@ -19,7 +19,7 @@ export async function GET(req: Request) {
     const leads = await prisma.lead.findMany({
       where: { companyId: companyId },
       orderBy: { createdAt: "desc" },
-      include: { user: true },
+      include: { services: true, user: true },
     });
 
     console.log("Fetched leads for companyId:", companyId, leads);
@@ -48,6 +48,12 @@ export async function POST(req: Request) {
         source: body.source,
         companyId: body.companyId,
         assignedTo: body.assignedTo,
+        services:
+          body.serviceIds && body.serviceIds.length > 0
+            ? {
+                connect: body.serviceIds.map((id: string) => ({ id })),
+              }
+            : undefined,
       },
     });
 

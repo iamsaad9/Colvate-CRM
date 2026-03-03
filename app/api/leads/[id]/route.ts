@@ -25,6 +25,7 @@ export async function GET(
       id: id,
       companyId: companyId,
     },
+    include: { services: true, user: true },
   });
 
   if (!lead) {
@@ -45,7 +46,7 @@ export async function PUT(
 
   const ids = routeId.split(",");
 
-  const { serviceIds, id: bodyId, createdAt, updatedAt, ...validData } = body;
+  const { ...validData } = body;
 
   if (!routeId || routeId === "undefined" || !companyId) {
     return NextResponse.json(
@@ -54,19 +55,39 @@ export async function PUT(
     );
   }
 
+  console.log(
+    "Updating lead:",
+    ids,
+    "with data:",
+    validData,
+    "for company:",
+    companyId,
+  );
+
   try {
-    // 2. Use updateMany with the 'in' operator
-    const result = await prisma.lead.updateMany({
-      where: {
-        id: { in: ids },
-        companyId: companyId as string,
-      },
-      data: validData,
-    });
+    const result = await prisma.$transaction(
+      ids.map((id) =>
+        prisma.lead.update({
+          where: {
+            id,
+            companyId: companyId as string,
+          },
+          data: {
+            ...validData,
+            services:
+              body.serviceIds && body.serviceIds.length > 0
+                ? {
+                    connect: body.serviceIds.map((id: string) => ({ id })),
+                  }
+                : undefined,
+          },
+        }),
+      ),
+    );
 
     return NextResponse.json({
-      message: `Updated ${result.count} leads`,
-      count: result.count,
+      message: `Updated ${result.length} leads`,
+      count: result.length,
     });
   } catch (error) {
     console.error("Update Error:", error);
@@ -116,7 +137,7 @@ export async function PATCH(
   try {
     const { id: routeId } = await params;
     const body = await req.json();
-    const { status, assignedTo } = body;
+    const { status, assignedTo, serviceIds } = body;
     const { searchParams } = new URL(req.url);
     const companyId = searchParams.get("companyId");
 
@@ -133,6 +154,11 @@ export async function PATCH(
     const updateData: any = {};
     if (status !== undefined) updateData.status = status;
     if (assignedTo !== undefined) updateData.assignedTo = assignedTo;
+    if (serviceIds !== undefined) {
+      updateData.services = {
+        set: serviceIds.map((id: string) => ({ id })),
+      };
+    }
 
     // Check if there's actually anything to update
     if (Object.keys(updateData).length === 0) {
@@ -142,15 +168,19 @@ export async function PATCH(
       );
     }
 
-    const result = await prisma.lead.updateMany({
-      where: {
-        id: { in: ids },
-        companyId: companyId,
-      },
-      data: updateData, // Pass the dynamic object here
-    });
+    const results = await Promise.all(
+      ids.map((id) =>
+        prisma.lead.update({
+          where: {
+            id,
+            companyId: companyId, // Security check
+          },
+          data: updateData,
+        }),
+      ),
+    );
 
-    return NextResponse.json(result);
+    return NextResponse.json({ count: results.length });
   } catch (error) {
     console.error("PATCH_LEAD_ERROR", error);
     return NextResponse.json(
