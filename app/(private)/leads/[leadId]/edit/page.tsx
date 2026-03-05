@@ -89,6 +89,7 @@ export default function EditLeadPage() {
             name: nameRef.current?.value || formData.name,
             email: emailRef.current?.value || formData.email,
             phone: phoneRef.current?.value || formData.phone,
+            serviceIds: formData.services.map((s) => s.id),
           }),
         },
       );

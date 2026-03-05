@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import  prisma  from "@/app/lib/prisma";
+import prisma from "@/app/lib/prisma";
 
 // 🔹 GET ALL CUSTOMERS
 export async function GET() {
@@ -14,7 +14,7 @@ export async function GET() {
   } catch (error) {
     return NextResponse.json(
       { error: "Failed to fetch customers" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -24,30 +24,32 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    const { name, email, phone, companyId } = body;
+    const { name, companyId } = body;
 
     if (!name || !companyId) {
       return NextResponse.json(
         { error: "Name and Company ID required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const customer = await prisma.customer.create({
       data: {
-        name,
-        email,
-        phone,
-        companyId,
+        name: body.name,
+        email: body.email,
+        phone: body.phone,
+        companyId: body.companyId,
+        companyName: body.companyName || null,
+        source: body.source || null,
+        assignedTo: body.assignedTo || null,
       },
     });
 
     return NextResponse.json(customer, { status: 201 });
   } catch (error) {
     return NextResponse.json(
-      
-      { error: "Failed to create customer: "},
-      { status: 500 }
+      { error: "Failed to create customer: " },
+      { status: 500 },
     );
   }
 }

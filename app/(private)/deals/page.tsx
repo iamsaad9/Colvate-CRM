@@ -4,7 +4,6 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import {
   Card,
   CardBody,
-  CardHeader,
   Button,
   Input,
   Table,
@@ -14,7 +13,6 @@ import {
   TableRow,
   TableCell,
   Chip,
-  Avatar,
   Dropdown,
   DropdownTrigger,
   DropdownMenu,
@@ -29,9 +27,6 @@ import {
   ModalFooter,
   Textarea,
   User as UserComponent,
-  Progress,
-  Tabs,
-  Tab,
   Skeleton,
 } from "@heroui/react";
 import {
@@ -45,15 +40,10 @@ import {
   DollarSign,
   Calendar,
   TrendingUp,
-  Grid,
   List,
   SlidersHorizontal,
   Eye,
   CheckCircle,
-  XCircle,
-  Clock,
-  User,
-  Building2,
   ArrowRight,
   Target,
   RefreshCcw,
@@ -63,7 +53,9 @@ import { useUser } from "@/app/context/UserContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAllUser } from "@/app/hooks/useAllUsers";
 import { useAllDeals } from "@/app/hooks/useAllsDeals";
-import { Deal, DealStage } from "@/app/types/types";
+import { Deal, DealStage, Service } from "@/app/types/types";
+import { useCustomers } from "@/app/hooks/useCustomers";
+import { useServices } from "@/app/hooks/useServices";
 
 export default function DealsPage() {
   const currentUser = useUser();
@@ -82,6 +74,7 @@ export default function DealsPage() {
   const titleRef = useRef<HTMLInputElement>(null);
   const valueRef = useRef<HTMLInputElement>(null);
   const notesRef = useRef<HTMLTextAreaElement>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const {
     data: allDeals = [],
     isLoading: dealsLoading,
@@ -90,6 +83,11 @@ export default function DealsPage() {
   const { data: allUsers = [], isLoading: allUserLoading } = useAllUser(
     currentUser?.companyId || "",
   );
+  const {
+    data: allCustomer = [],
+    refetch: refetchCustomers,
+    isLoading: allCustomerLoading,
+  } = useCustomers(currentUser?.companyId || "");
 
   const [stageFilter, setStageFilter] = useState<Set<string>>(new Set(["all"]));
   const [assignedFilter, setAssignedFilter] = useState<Set<string>>(
@@ -158,6 +156,7 @@ export default function DealsPage() {
   useEffect(() => {
     console.log("Fetched Deals: ", allDeals);
     refetchDeals();
+    refetchCustomers();
   }, [allDeals.length, refetchDeals, allDeals]);
 
   // Filtered data
@@ -282,10 +281,29 @@ export default function DealsPage() {
     resetForm();
   };
 
-  const handleDeleteDeal = () => {
-    console.log("Deleting deal:", selectedDeal?.id);
-    setIsDeleteModalOpen(false);
-    setSelectedDeal(null);
+  const handleDeleteDeal = async () => {
+    if (!selectedDeal) return;
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(
+        `/api/deals/${selectedDeal.id}?companyId=${currentUser?.companyId}`,
+        {
+          method: "DELETE",
+        },
+      );
+      if (res.ok) {
+        await refetchDeals();
+        setIsDeleteModalOpen(false);
+        setSelectedDeal(null);
+      } else {
+        const err = await res.json();
+        alert(`Error: ${err.error}`);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const resetForm = () => {
@@ -365,7 +383,7 @@ export default function DealsPage() {
     };
   }, [filteredDeals]);
 
-  if (dealsLoading || allUserLoading) {
+  if (dealsLoading || allUserLoading || allCustomerLoading) {
     return (
       <div className="flex flex-col items-center max-w-[1600px] gap-5 p-5 mx-auto justify-center py-20 overflow-y-hidden  flex-1">
         <div className="w-full flex gap-10">
@@ -698,6 +716,7 @@ export default function DealsPage() {
           <TableColumn>DEAL</TableColumn>
           <TableColumn>CUSTOMER NAME</TableColumn>
           <TableColumn>VALUE</TableColumn>
+          <TableColumn>SERVICES</TableColumn>
           <TableColumn>STAGE</TableColumn>
           <TableColumn>EXPECTED CLOSE</TableColumn>
           <TableColumn>ASSIGNED TO</TableColumn>
@@ -713,13 +732,41 @@ export default function DealsPage() {
               </TableCell>
               <TableCell>
                 <div>
-                  <p className="">{deal.customerId || "Anonymous Customer"}</p>
+                  <p className="">
+                    {allCustomer.find((c) => c.id == deal.customerId)?.name ||
+                      "Anonymous Customer"}
+                  </p>
                 </div>
               </TableCell>
               <TableCell>
                 <span className="font-semibold text-primary">
                   {formatCurrency(deal.value)}
                 </span>
+              </TableCell>
+              <TableCell>
+                <div className="flex flex-col flex-wrap gap-1">
+                  {(deal.services ?? []).length > 0 && deal.services ? (
+                    <>
+                      {deal.services.slice(0, 2).map((s: Service) => (
+                        <Chip
+                          key={s.id}
+                          size="sm"
+                          variant="flat"
+                          color="secondary"
+                        >
+                          {s.name}
+                        </Chip>
+                      ))}
+                      {deal.services.length > 2 && (
+                        <Chip size="sm" variant="flat">
+                          +{deal.services.length - 2}
+                        </Chip>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-default-400 text-xs">—</span>
+                  )}
+                </div>
               </TableCell>
               <TableCell>
                 <Chip
@@ -768,58 +815,59 @@ export default function DealsPage() {
                 >
                   <Eye size={16} />
                 </Button>
-                {deal.assignedTo === currentUser?.id && (
-                  <>
-                    <Button
-                      isIconOnly
-                      size="sm"
-                      aria-label="edit-lead"
-                      variant="light"
-                      onPress={() => router.push(`/deals/${deal.id}/edit`)}
-                    >
-                      <Edit size={16} />
-                    </Button>
-                    <Dropdown>
-                      <DropdownTrigger>
-                        <Button isIconOnly size="sm" variant="light">
-                          <MoreVertical size={16} />
-                        </Button>
-                      </DropdownTrigger>
-                      <DropdownMenu>
-                        <DropdownItem
-                          key="view"
-                          startContent={<Eye size={16} />}
-                        >
-                          View Details
-                        </DropdownItem>
-                        <DropdownItem
-                          key="edit"
-                          startContent={<Edit size={16} />}
-                          onPress={() => openEditModal(deal)}
-                        >
-                          Edit Deal
-                        </DropdownItem>
-                        <DropdownItem
-                          key="move"
-                          startContent={<ArrowRight size={16} />}
-                        >
-                          Move Stage
-                        </DropdownItem>
-                        <DropdownItem
-                          key="delete"
-                          color="danger"
-                          startContent={<Trash2 size={16} />}
-                          onPress={() => {
-                            setSelectedDeal(deal);
-                            setIsDeleteModalOpen(true);
-                          }}
-                        >
-                          Delete Deal
-                        </DropdownItem>
-                      </DropdownMenu>
-                    </Dropdown>
-                  </>
-                )}
+                {currentUser?.role == "SALES" &&
+                  deal.assignedTo == currentUser.id && (
+                    <>
+                      <Button
+                        isIconOnly
+                        size="sm"
+                        aria-label="edit-lead"
+                        variant="light"
+                        onPress={() => router.push(`/deals/${deal.id}/edit`)}
+                      >
+                        <Edit size={16} />
+                      </Button>
+                      <Dropdown>
+                        <DropdownTrigger>
+                          <Button isIconOnly size="sm" variant="light">
+                            <MoreVertical size={16} />
+                          </Button>
+                        </DropdownTrigger>
+                        <DropdownMenu>
+                          <DropdownItem
+                            key="view"
+                            startContent={<Eye size={16} />}
+                          >
+                            View Details
+                          </DropdownItem>
+                          <DropdownItem
+                            key="edit"
+                            startContent={<Edit size={16} />}
+                            onPress={() => openEditModal(deal)}
+                          >
+                            Edit Deal
+                          </DropdownItem>
+                          <DropdownItem
+                            key="move"
+                            startContent={<ArrowRight size={16} />}
+                          >
+                            Move Stage
+                          </DropdownItem>
+                          <DropdownItem
+                            key="delete"
+                            color="danger"
+                            startContent={<Trash2 size={16} />}
+                            onPress={() => {
+                              setSelectedDeal(deal);
+                              setIsDeleteModalOpen(true);
+                            }}
+                          >
+                            Delete Deal
+                          </DropdownItem>
+                        </DropdownMenu>
+                      </Dropdown>
+                    </>
+                  )}
               </TableCell>
             </TableRow>
           ))}
@@ -1072,7 +1120,11 @@ export default function DealsPage() {
             <Button variant="light" onPress={() => setIsDeleteModalOpen(false)}>
               Cancel
             </Button>
-            <Button color="danger" onPress={handleDeleteDeal}>
+            <Button
+              color="danger"
+              isLoading={isSubmitting}
+              onPress={handleDeleteDeal}
+            >
               Delete
             </Button>
           </ModalFooter>

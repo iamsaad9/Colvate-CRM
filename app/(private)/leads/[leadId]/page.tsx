@@ -333,7 +333,7 @@ export default function ViewLeadPage() {
                     </div>
                   ))}
                   <div className="flex justify-between items-center pt-2 text-sm font-semibold">
-                    <span>Total Value</span>
+                    <span>Expected Value</span>
                     <span>
                       {formatCurrency(
                         linkedServices.reduce(

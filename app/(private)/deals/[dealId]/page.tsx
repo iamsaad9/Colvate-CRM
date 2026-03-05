@@ -8,6 +8,11 @@ import {
   CardHeader,
   Chip,
   Divider,
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
   Skeleton,
 } from "@heroui/react";
 import {
@@ -17,14 +22,14 @@ import {
   CheckCircle2,
   Clock,
   Edit,
-  Layers,
+  Globe,
   Mail,
   Phone,
   Trash2,
   User as UserIcon,
   X,
 } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useDeal } from "@/app/hooks/useDeal";
 import { useAllUser } from "@/app/hooks/useAllUsers";
@@ -45,6 +50,8 @@ export default function ViewDealPage() {
   const params = useParams();
   const dealId = params.dealId as string;
   const currentUser = useUser();
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
     data: deal,
@@ -57,11 +64,13 @@ export default function ViewDealPage() {
   const { data: allServices = [], isLoading: servicesLoading } = useServices(
     currentUser?.companyId || "",
   );
-  const { data: allCustomers = [], isLoading: customersLoading } = useCustomers(
-    currentUser?.companyId || "",
-  );
+  const {
+    data: allCustomers = [],
+    isLoading: customersLoading,
+    refetch: fetchCustomer,
+  } = useCustomers(currentUser?.companyId || "");
 
-  const userLead = deal?.assignedTo === currentUser?.id;
+  const userDeal = deal?.assignedTo === currentUser?.id;
   const leadCustomer = allCustomers.find(
     (c: Customer) => c.id === deal?.customerId,
   );
@@ -88,7 +97,8 @@ export default function ViewDealPage() {
   useEffect(() => {
     console.log("deal data:", deal);
     console.log("Services data:", allServices);
-  }, [deal, allServices]);
+    fetchCustomer();
+  }, [deal, allServices, fetchCustomer]);
 
   const handleStageChange = async (stage: DealStage) => {
     try {
@@ -103,13 +113,27 @@ export default function ViewDealPage() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!confirm(`Delete "${deal?.title}"? This cannot be undone.`)) return;
+  const handleDeleteDeal = async () => {
+    if (!deal) return;
+    setIsSubmitting(true);
     try {
-      await fetch(`/api/deals/${dealId}`, { method: "DELETE" });
-      router.push("/deals");
+      const res = await fetch(
+        `/api/deals/${deal.id}?companyId=${currentUser?.companyId}`,
+        {
+          method: "DELETE",
+        },
+      );
+      if (res.ok) {
+        setIsDeleteModalOpen(false);
+        router.push("/deals");
+      } else {
+        const err = await res.json();
+        alert(`Error: ${err.error}`);
+      }
     } catch (err) {
       console.error(err);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -175,14 +199,14 @@ export default function ViewDealPage() {
             </p>
           </div>
         </div>
-        {userLead && (
+        {userDeal && (
           <div className="flex gap-2 flex-shrink-0">
             <Button
               variant="flat"
               radius="full"
               color="danger"
               startContent={<Trash2 size={16} />}
-              onPress={handleDelete}
+              onPress={() => setIsDeleteModalOpen(true)}
             >
               Delete
             </Button>
@@ -199,16 +223,13 @@ export default function ViewDealPage() {
       </div>
 
       {/* Stage Pipeline */}
-      <Card>
+      <Card radius="sm">
         <CardBody className="py-5 px-6">
           <StagePipeline
             currentStage={deal.stage ?? "PROSPECT"}
             onChange={handleStageChange}
             isEditing={false}
           />
-          <p className="text-xs text-default-400 text-center mt-1">
-            Click a stage to quickly advance this deal
-          </p>
         </CardBody>
       </Card>
 
@@ -216,7 +237,7 @@ export default function ViewDealPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left */}
         <div className="lg:col-span-2 space-y-6">
-          <Card>
+          <Card radius="sm">
             <CardHeader className="pb-0">
               <h2 className="text-lg font-semibold">Deal Information</h2>
             </CardHeader>
@@ -241,12 +262,12 @@ export default function ViewDealPage() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
                   {/* Customer */}
                   <div>
                     <p className="text-xs text-default-400 mb-1.5">Customer</p>
                     {leadCustomer ? (
-                      <div className="flex items-start gap-3">
+                      <div className="flex gap-3">
                         <div className="w-10 h-10 rounded-full bg-default-100 flex items-center justify-center flex-shrink-0">
                           <Building2 size={16} className="text-default-400" />
                         </div>
@@ -276,27 +297,58 @@ export default function ViewDealPage() {
                               {leadCustomer.status}
                             </Chip>
                           </div>
+
                           <div className="mt-2 text-xs text-default-400 space-y-1">
+                            {/* Email Row */}
                             {leadCustomer.email && (
                               <div className="flex items-center gap-2">
-                                <Mail size={12} />
-                                <span>{leadCustomer.email}</span>
+                                <Mail size={12} className="flex-shrink-0" />
+                                <span className="truncate">
+                                  {leadCustomer.email}
+                                </span>
                               </div>
                             )}
+
+                            {/* Phone Row */}
                             {leadCustomer.phone && (
                               <div className="flex items-center gap-2">
-                                <Phone size={12} />
+                                <Phone size={12} className="flex-shrink-0" />
                                 <span>{leadCustomer.phone}</span>
                               </div>
                             )}
-                            {leadCustomer.source && (
+
+                            {/* Assigned User Row */}
+                            {leadCustomer.user && (
                               <div className="flex items-center gap-2">
-                                <span className="text-default-400">
-                                  Source:
+                                <UserIcon size={12} className="flex-shrink-0" />
+                                <span>
+                                  Assigned to:{" "}
+                                  <span className="text-default-600 font-medium">
+                                    {leadCustomer.user.name}
+                                  </span>
                                 </span>
-                                <span>{leadCustomer.source}</span>
                               </div>
                             )}
+
+                            {/* Source & Date Row (Grouped for better vertical space) */}
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 border-t border-default-50 mt-1">
+                              {leadCustomer.source && (
+                                <div className="flex items-center gap-1.5">
+                                  <Globe size={12} className="flex-shrink-0" />
+                                  <span>{leadCustomer.source}</span>
+                                </div>
+                              )}
+
+                              <div className="flex items-center gap-1.5">
+                                <Calendar size={12} className="flex-shrink-0" />
+                                <span>
+                                  Added:{" "}
+                                  {new Date(
+                                    leadCustomer.createdAt,
+                                  ).toLocaleDateString()}
+                                </span>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -357,7 +409,7 @@ export default function ViewDealPage() {
                     </div>
                   ))}
                   <div className="flex justify-between items-center pt-2 text-sm font-semibold">
-                    <span>Total Value</span>
+                    <span>Expected Value</span>
                     <span>
                       {formatCurrency(
                         linkedServices.reduce(
@@ -378,7 +430,7 @@ export default function ViewDealPage() {
         {/* Right */}
         <div className="space-y-6">
           {/* Owner */}
-          <Card>
+          <Card radius="sm">
             <CardHeader className="pb-0">
               <h2 className="text-lg font-semibold">Owner</h2>
             </CardHeader>
@@ -386,6 +438,7 @@ export default function ViewDealPage() {
               {assignedUser ? (
                 <div className="flex items-center gap-3">
                   <Avatar
+                    color="primary"
                     src={assignedUser.avatarUrl || ""}
                     name={assignedUser.name}
                     size="md"
@@ -407,7 +460,7 @@ export default function ViewDealPage() {
           </Card>
 
           {/* Details */}
-          <Card>
+          <Card radius="sm">
             <CardHeader className="pb-0">
               <h2 className="text-lg font-semibold">Details</h2>
             </CardHeader>
@@ -515,6 +568,38 @@ export default function ViewDealPage() {
               </CardBody>
             </Card>
           )}
+
+          {/* Delete Modal */}
+          <Modal
+            isOpen={isDeleteModalOpen}
+            onClose={() => setIsDeleteModalOpen(false)}
+            size="sm"
+          >
+            <ModalContent>
+              <ModalHeader>Delete Deal</ModalHeader>
+              <ModalBody>
+                <p>
+                  Are you sure you want to delete <strong>{deal?.title}</strong>
+                  ?
+                </p>
+              </ModalBody>
+              <ModalFooter>
+                <Button
+                  variant="light"
+                  onPress={() => setIsDeleteModalOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  color="danger"
+                  isLoading={isSubmitting}
+                  onPress={handleDeleteDeal}
+                >
+                  Delete
+                </Button>
+              </ModalFooter>
+            </ModalContent>
+          </Modal>
         </div>
       </div>
     </div>

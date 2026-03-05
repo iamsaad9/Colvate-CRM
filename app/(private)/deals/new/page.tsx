@@ -23,17 +23,16 @@ import { useUser } from "@/app/context/UserContext";
 import { Service, User } from "@/app/types/types";
 import { parseDate } from "@internationalized/date";
 import {
-  Customer,
   DealFormData,
   NewCustomerData,
   EMPTY_FORM,
   EMPTY_NEW_CUSTOMER,
-  STAGE_META,
   formatCurrency,
   StagePipeline,
   NewCustomerSection,
 } from "@/app/components/deals/deal-shared";
 import { DealStage } from "@prisma/client";
+import { Customer } from "@/app/types/types";
 
 export default function NewDealPage() {
   const router = useRouter();
@@ -55,10 +54,20 @@ export default function NewDealPage() {
     currentUser?.companyId || "",
   );
 
-  const selectedService = useMemo(
-    () => allServices.find((s: Service) => s.id === formData.serviceId),
-    [allServices, formData.serviceId],
-  );
+  const selectedServices = useMemo(() => {
+    const selectedIds = new Set(formData.services.map((ser) => ser.id));
+
+    return allServices.filter((s: Service) => selectedIds.has(s.id));
+  }, [allServices, formData.services]);
+
+  // Calculate the total price
+  const totalListPrice = useMemo(() => {
+    console.log("Calculating total list price for services:", selectedServices);
+    return selectedServices.reduce(
+      (sum: number, service: Service) => sum + (Number(service.price) || 0),
+      0,
+    );
+  }, [selectedServices]);
 
   const isLoading = usersLoading || servicesLoading || customersLoading;
 
@@ -100,6 +109,7 @@ export default function NewDealPage() {
           expectedCloseDate: formData.expectedCloseDate || null,
           assignedTo: formData.assignedTo || null,
           companyId: currentUser?.companyId,
+          serviceIds: formData.services.map((s) => s.id),
         }),
       });
 
@@ -139,7 +149,7 @@ export default function NewDealPage() {
         <div className="flex items-center gap-3">
           <Button
             isIconOnly
-            variant="flat"
+            variant="light"
             radius="full"
             onPress={() => router.push("/deals")}
           >
@@ -174,8 +184,11 @@ export default function NewDealPage() {
       </div>
 
       {/* Stage Pipeline */}
-      <Card>
-        <CardBody className="py-5 px-6">
+      <Card radius="sm">
+        <CardHeader className="">
+          <h2 className="text-lg font-semibold">Deal Stage</h2>
+        </CardHeader>
+        <CardBody className="py-2 px-6">
           <StagePipeline
             currentStage={formData.stage}
             onChange={(stage: DealStage) => setFormData({ ...formData, stage })}
@@ -191,12 +204,12 @@ export default function NewDealPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left */}
         <div className="lg:col-span-2 space-y-6">
-          <Card>
+          <Card radius="sm">
             <CardHeader className="pb-0">
               <h2 className="text-lg font-semibold">Deal Information</h2>
             </CardHeader>
             <CardBody>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-hidden">
                 <Input
                   label="Deal Title"
                   placeholder="e.g. Acme Corp — Enterprise Plan"
@@ -245,40 +258,48 @@ export default function NewDealPage() {
                 </NewCustomerSection>
 
                 <Select
-                  label="Service"
-                  placeholder="Select service"
-                  selectedKeys={
-                    formData.serviceId
-                      ? new Set([formData.serviceId])
-                      : new Set()
-                  }
-                  onSelectionChange={(keys) => {
-                    const serviceId = Array.from(keys)[0] as string;
-                    const svc = allServices.find(
-                      (s: Service) => s.id === serviceId,
-                    );
+                  label="Link Services"
+                  radius="sm"
+                  placeholder="Select services"
+                  selectionMode="multiple"
+                  selectedKeys={new Set(formData.services.map((s) => s.id))}
+                  onSelectionChange={(keys) =>
                     setFormData({
                       ...formData,
-                      serviceId,
-                      value:
-                        !formData.value && svc
-                          ? svc.price.toString()
-                          : formData.value,
-                    });
-                  }}
+                      services: Array.from(keys)
+                        .map((id) =>
+                          allServices.find((s: Service) => s.id === id),
+                        )
+                        .filter((s): s is Service => s !== undefined),
+                    })
+                  }
+                  renderValue={(items) => (
+                    <div className="flex flex-wrap gap-1">
+                      {items.map((item) => (
+                        <Chip
+                          key={item.key}
+                          size="sm"
+                          variant="flat"
+                          color="primary"
+                        >
+                          {item.textValue}
+                        </Chip>
+                      ))}
+                    </div>
+                  )}
                 >
                   {allServices
                     .filter((s: Service) => s.isActive)
-                    .map((s: Service) => (
+                    .map((service: Service) => (
                       <SelectItem
-                        key={s.id}
-                        textValue={s.name}
-                        description={formatCurrency(s.price)}
+                        key={service.id}
+                        textValue={service.name}
+                        description={`$${service.price}`}
                       >
                         <div className="flex justify-between items-center w-full">
-                          <span>{s.name}</span>
+                          <span>{service.name}</span>
                           <Chip size="sm" variant="flat" color="success">
-                            {formatCurrency(s.price)}
+                            {formatCurrency(service.price)}
                           </Chip>
                         </div>
                       </SelectItem>
@@ -296,9 +317,9 @@ export default function NewDealPage() {
                   value={formData.value}
                   onValueChange={(v) => setFormData({ ...formData, value: v })}
                   description={
-                    selectedService
-                      ? `Service list price: ${formatCurrency(selectedService.price)}`
-                      : undefined
+                    selectedServices.length > 0
+                      ? `Total list price (${selectedServices.length} services): ${formatCurrency(totalListPrice)}`
+                      : "No services selected"
                   }
                 />
                 <DatePicker
@@ -322,7 +343,7 @@ export default function NewDealPage() {
 
         {/* Right */}
         <div className="space-y-6">
-          <Card>
+          <Card radius="sm">
             <CardHeader className="pb-0">
               <h2 className="text-lg font-semibold">Owner</h2>
             </CardHeader>

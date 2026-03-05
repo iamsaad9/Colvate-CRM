@@ -73,13 +73,16 @@ export async function PUT(
             companyId: companyId as string,
           },
           data: {
-            ...validData,
-            services:
-              body.serviceIds && body.serviceIds.length > 0
-                ? {
-                    connect: body.serviceIds.map((id: string) => ({ id })),
-                  }
-                : undefined,
+            name: body.name,
+            email: body.email,
+            phone: body.phone,
+            status: body.status,
+            source: body.source,
+            companyId: body.companyId,
+            assignedTo: body.assignedTo,
+            services: {
+              set: body.serviceIds?.map((id: string) => ({ id })) || [],
+            },
           },
         }),
       ),

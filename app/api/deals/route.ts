@@ -21,7 +21,7 @@ export async function GET(req: Request) {
       include: { services: true, user: true },
     });
 
-    console.log("Fetched leads for companyId:", companyId, deals);
+    console.log("Fetched deals for companyId:", companyId, deals);
     return NextResponse.json(deals);
   } catch {
     return NextResponse.json(

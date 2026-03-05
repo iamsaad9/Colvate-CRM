@@ -45,7 +45,6 @@ export async function PUT(
   const companyId = searchParams.get("companyId");
 
   const ids = routeId.split(",");
-  const { validData } = body;
 
   if (!routeId || routeId === "undefined" || !companyId) {
     return NextResponse.json(
@@ -55,33 +54,37 @@ export async function PUT(
   }
 
   console.log(
-    "Updating deal with IDs:",
-    ids,
-    "for company:",
-    companyId,
-    "with data:",
-    validData,
+    "Updating deal with:",
+
+    body,
   );
   try {
-    const result = await prisma.deal.updateMany({
-      where: {
-        id: { in: ids },
-        companyId: companyId as string,
-      },
-      data: {
-        ...validData,
-        services: body.serviceIds
-          ? {
-              set: body.serviceIds.map((sId: string) => ({ id: sId })),
-            }
-          : undefined,
-        serviceIds: undefined,
-      },
-    });
-
+    const result = await prisma.$transaction(
+      ids.map((id) =>
+        prisma.deal.update({
+          where: {
+            id,
+            companyId: companyId as string,
+          },
+          data: {
+            title: body.title,
+            value: body.value,
+            stage: body.stage,
+            assignedTo: body.assignedTo,
+            customerId: body.customerId,
+            expectedCloseDate: body.expectedCloseDate
+              ? new Date(body.expectedCloseDate)
+              : null,
+            services: {
+              set: body.serviceIds?.map((id: string) => ({ id })) || [],
+            },
+          },
+        }),
+      ),
+    );
     return NextResponse.json({
-      message: `Updated ${result.count} deals`,
-      count: result.count,
+      message: `Updated ${result.length} leads`,
+      count: result.length,
     });
   } catch (error) {
     console.error("Update Error:", error);

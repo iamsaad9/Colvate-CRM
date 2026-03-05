@@ -91,4 +91,11 @@ export interface Customer {
   assignedTo: string | null;
   createdAt: Date;
   updatedAt: Date;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl?: string;
+    avatar?: string;
+  };
 }

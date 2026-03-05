@@ -60,7 +60,7 @@ export default function EditDealPage() {
     title: "",
     customerId: null,
     services: [],
-    value: "",
+    value: 0,
     stage: "PROSPECT",
     expectedCloseDate: "",
     assignedTo: null,
@@ -123,6 +123,14 @@ export default function EditDealPage() {
         customerId = created.id;
       }
 
+      console.log("Updating deal with data:", {
+        ...formData,
+        customerId,
+        value: parseFloat(formData.value) || 0,
+        expectedCloseDate: formData.expectedCloseDate || null,
+        assignedTo: formData.assignedTo || null,
+      });
+
       const res = await fetch(
         `/api/deals/${dealId}?companyId=${currentUser?.companyId}`,
         {
@@ -134,6 +142,7 @@ export default function EditDealPage() {
             value: parseFloat(formData.value) || 0,
             expectedCloseDate: formData.expectedCloseDate || null,
             assignedTo: formData.assignedTo || null,
+            serviceIds: formData.services.map((s) => s.id),
           }),
         },
       );
@@ -260,7 +269,7 @@ export default function EditDealPage() {
               <h2 className="text-lg font-semibold">Deal Information</h2>
             </CardHeader>
             <CardBody>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-hidden">
                 <Input
                   label="Deal Title"
                   placeholder="e.g. Acme Corp — Enterprise Plan"
@@ -365,8 +374,10 @@ export default function EditDealPage() {
                   startContent={
                     <span className="text-default-400 text-sm">$</span>
                   }
-                  value={formData.value}
-                  onValueChange={(v) => setFormData({ ...formData, value: v })}
+                  value={formData.value.toString()}
+                  onValueChange={(v) =>
+                    setFormData({ ...formData, value: parseFloat(v) })
+                  }
                   description={
                     selectedService
                       ? `Service list price: ${formatCurrency(selectedService.price)}`

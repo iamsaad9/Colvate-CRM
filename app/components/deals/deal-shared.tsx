@@ -9,7 +9,7 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
-import { Checkbox, Input } from "@heroui/react";
+import { Checkbox, Input, Select, SelectItem } from "@heroui/react";
 import { DealStage, Service } from "@/app/types/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -20,13 +20,14 @@ export interface NewCustomerData {
   phone: string;
   companyName: string;
   source: string;
+  assignedTo?: string;
 }
 
 export interface DealFormData {
   title: string;
   customerId: string | null;
   services: Service[];
-  value: string;
+  value: number;
   stage: DealStage;
   expectedCloseDate: string;
   assignedTo: string | null;
@@ -36,7 +37,7 @@ export const EMPTY_FORM: DealFormData = {
   title: "",
   customerId: null,
   services: [],
-  value: "",
+  value: 0,
   stage: "PROSPECT",
   expectedCloseDate: "",
   assignedTo: null,
@@ -47,6 +48,7 @@ export const EMPTY_NEW_CUSTOMER: NewCustomerData = {
   email: "",
   phone: "",
   companyName: "",
+  assignedTo: "",
   source: "",
 };
 
@@ -57,6 +59,16 @@ export const STAGE_STEPS: DealStage[] = [
   "NEGOTIATION",
   "WON",
   "LOST",
+];
+
+export const SOURCES = [
+  "Website",
+  "Referral",
+  "LinkedIn",
+  "Cold Email",
+  "Trade Show",
+  "Partner",
+  "Advertisement",
 ];
 
 export const STAGE_META: Record<
@@ -306,7 +318,7 @@ export function NewCustomerSection({
                 onCustomerDataChange({ ...newCustomerData, companyName: v })
               }
             />
-            <Input
+            {/* <Input
               label="Source"
               placeholder="e.g. Referral, LinkedIn..."
               className="md:col-span-2"
@@ -314,7 +326,27 @@ export function NewCustomerSection({
               onValueChange={(v) =>
                 onCustomerDataChange({ ...newCustomerData, source: v })
               }
-            />
+            /> */}
+            <Select
+              label="Source"
+              placeholder="Select source"
+              radius="sm"
+              selectedKeys={
+                newCustomerData.source
+                  ? new Set([newCustomerData.source])
+                  : new Set()
+              }
+              onSelectionChange={(keys) =>
+                onCustomerDataChange({
+                  ...newCustomerData,
+                  source: Array.from(keys)[0] as string,
+                })
+              }
+            >
+              {SOURCES.map((s) => (
+                <SelectItem key={s}>{s}</SelectItem>
+              ))}
+            </Select>
           </div>
         </div>
       )}

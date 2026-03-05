@@ -39,7 +39,7 @@ import { useUser } from "@/app/context/UserContext";
 interface FormData {
   name: string;
   description: string;
-  price: string;
+  price: number;
   isActive: boolean;
 }
 
@@ -102,7 +102,7 @@ function StatCard({
 }: {
   icon: React.ReactNode;
   label: string;
-  value: string;
+  value: number;
   sub?: string;
   color?: "default" | "success" | "primary" | "warning";
 }) {
@@ -154,7 +154,7 @@ export default function ServiceDetailPage() {
   const [formData, setFormData] = useState<FormData>({
     name: "",
     description: "",
-    price: "",
+    price: 0,
     isActive: true,
   });
 
@@ -163,7 +163,7 @@ export default function ServiceDetailPage() {
       setFormData({
         name: service.name ?? "",
         description: service.description ?? "",
-        price: service.price?.toString() ?? "",
+        price: service.price ?? 0,
         isActive: service.isActive ?? true,
       });
     }
@@ -197,6 +197,8 @@ export default function ServiceDetailPage() {
         companyId: currentUser?.companyId,
       };
 
+      console.log("Service payload to save:", payload);
+
       if (isNew) {
         const res = await fetch("/api/services", {
           method: "POST",
@@ -205,7 +207,7 @@ export default function ServiceDetailPage() {
         });
         if (res.ok) {
           const created = await res.json();
-          router.replace(`/services/${created.id}`);
+          // router.replace(`/services/${created.id}`);
         } else {
           const err = await res.json();
           alert(`Error: ${err.error}`);
@@ -219,7 +221,7 @@ export default function ServiceDetailPage() {
         if (res.ok) {
           await refetchService();
           setIsEditing(false);
-          router.replace(`/services/${serviceId}`);
+          // router.replace(`/services/${serviceId}`);
         } else {
           const err = await res.json();
           alert(`Error: ${err.error}`);
@@ -270,7 +272,7 @@ export default function ServiceDetailPage() {
         setFormData({
           name: service.name ?? "",
           description: service.description ?? "",
-          price: service.price?.toString() ?? "",
+          price: service.price ?? 0,
           isActive: service.isActive ?? true,
         });
       }
@@ -475,9 +477,9 @@ export default function ServiceDetailPage() {
                     startContent={
                       <span className="text-default-400 text-sm">$</span>
                     }
-                    value={formData.price}
+                    value={formData.price.toString()}
                     onValueChange={(v) =>
-                      setFormData({ ...formData, price: v })
+                      setFormData({ ...formData, price: parseFloat(v) || 0 })
                     }
                     description="This will be used as the default value when creating deals."
                   />

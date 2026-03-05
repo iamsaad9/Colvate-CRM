@@ -134,12 +134,18 @@ export default function NewLeadPage() {
 
       {/* Stage Timeline */}
       <Card>
-        <CardBody className="py-4">
+        <CardHeader className="">
+          <h2 className="text-lg font-semibold">Lead Status</h2>
+        </CardHeader>
+        <CardBody className="py-2 px-6">
           <StatusTimeline
             currentStatus={formData.status}
             onChange={(s) => setFormData({ ...formData, status: s })}
             isEditing
           />
+          <p className="text-xs text-default-400 text-center mt-2">
+            Click a stage to set the lead status
+          </p>
         </CardBody>
       </Card>
 
