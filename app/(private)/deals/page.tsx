@@ -155,6 +155,7 @@ export default function DealsPage() {
 
   useEffect(() => {
     console.log("Fetched Deals: ", allDeals);
+    console.log("User", currentUser);
     refetchDeals();
     refetchCustomers();
   }, [allDeals.length, refetchDeals, allDeals]);
@@ -669,7 +670,7 @@ export default function DealsPage() {
         radius="sm"
         shadow="none"
         classNames={{
-          tr: "dark:bg-transparent",
+          wrapper: "bg-transparent",
           th: "border-b-2 border-default bg-transparent",
         }}
         bottomContent={
@@ -815,59 +816,60 @@ export default function DealsPage() {
                 >
                   <Eye size={16} />
                 </Button>
-                {currentUser?.role == "SALES" &&
-                  deal.assignedTo == currentUser.id && (
-                    <>
-                      <Button
-                        isIconOnly
-                        size="sm"
-                        aria-label="edit-lead"
-                        variant="light"
-                        onPress={() => router.push(`/deals/${deal.id}/edit`)}
-                      >
-                        <Edit size={16} />
-                      </Button>
-                      <Dropdown>
-                        <DropdownTrigger>
-                          <Button isIconOnly size="sm" variant="light">
-                            <MoreVertical size={16} />
-                          </Button>
-                        </DropdownTrigger>
-                        <DropdownMenu>
-                          <DropdownItem
-                            key="view"
-                            startContent={<Eye size={16} />}
-                          >
-                            View Details
-                          </DropdownItem>
-                          <DropdownItem
-                            key="edit"
-                            startContent={<Edit size={16} />}
-                            onPress={() => openEditModal(deal)}
-                          >
-                            Edit Deal
-                          </DropdownItem>
-                          <DropdownItem
-                            key="move"
-                            startContent={<ArrowRight size={16} />}
-                          >
-                            Move Stage
-                          </DropdownItem>
-                          <DropdownItem
-                            key="delete"
-                            color="danger"
-                            startContent={<Trash2 size={16} />}
-                            onPress={() => {
-                              setSelectedDeal(deal);
-                              setIsDeleteModalOpen(true);
-                            }}
-                          >
-                            Delete Deal
-                          </DropdownItem>
-                        </DropdownMenu>
-                      </Dropdown>
-                    </>
-                  )}
+                {(currentUser?.role === "ADMIN" ||
+                  (currentUser?.role === "SALES" &&
+                    deal.assignedTo === currentUser?.id)) && (
+                  <>
+                    <Button
+                      isIconOnly
+                      size="sm"
+                      aria-label="edit-lead"
+                      variant="light"
+                      onPress={() => router.push(`/deals/${deal.id}/edit`)}
+                    >
+                      <Edit size={16} />
+                    </Button>
+                    <Dropdown>
+                      <DropdownTrigger>
+                        <Button isIconOnly size="sm" variant="light">
+                          <MoreVertical size={16} />
+                        </Button>
+                      </DropdownTrigger>
+                      <DropdownMenu>
+                        <DropdownItem
+                          key="view"
+                          startContent={<Eye size={16} />}
+                        >
+                          View Details
+                        </DropdownItem>
+                        <DropdownItem
+                          key="edit"
+                          startContent={<Edit size={16} />}
+                          onPress={() => openEditModal(deal)}
+                        >
+                          Edit Deal
+                        </DropdownItem>
+                        <DropdownItem
+                          key="move"
+                          startContent={<ArrowRight size={16} />}
+                        >
+                          Move Stage
+                        </DropdownItem>
+                        <DropdownItem
+                          key="delete"
+                          color="danger"
+                          startContent={<Trash2 size={16} />}
+                          onPress={() => {
+                            setSelectedDeal(deal);
+                            setIsDeleteModalOpen(true);
+                          }}
+                        >
+                          Delete Deal
+                        </DropdownItem>
+                      </DropdownMenu>
+                    </Dropdown>
+                  </>
+                )}
               </TableCell>
             </TableRow>
           ))}

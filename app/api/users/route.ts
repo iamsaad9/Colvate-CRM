@@ -46,7 +46,7 @@ export async function GET(req: Request) {
 // POST: Create a new team member
 export async function POST(req: Request) {
   try {
-    const { name, email, role, companyId } = await req.json();
+    const { name, email, role, companyId, reportsToId } = await req.json();
     const password = `${name}123`;
 
     if (!email || !companyId) {
@@ -65,6 +65,7 @@ export async function POST(req: Request) {
         passwordHash: hashedPassword,
         role,
         companyId,
+        reportsToId: reportsToId,
       },
     });
 

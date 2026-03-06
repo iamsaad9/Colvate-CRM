@@ -471,9 +471,9 @@ export default function LeadsPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto space-y-6">
+    <div className="p-6 max-w-[1600px] mx-auto space-y-6 ">
       {/* ── Header ── */}
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 relative">
         <div className="flex justify-between items-center ">
           <div className="flex gap-5 justify-center items-center">
             <Target size={30} />
@@ -759,9 +759,13 @@ export default function LeadsPage() {
 
         {/* ── Bulk Actions ── */}
         {selectedKeys.size > 0 && (
-          <Card className="bg-primary-50 border-primary-200">
+          <Card
+            className="bg-primary-50 border-1 border-primary fixed bottom-10 z-1 w-[90%] mx-auto left-0 right-10"
+            radius="sm"
+            shadow="md"
+          >
             <CardBody>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between ">
                 <p className="font-semibold text-primary">
                   {selectedKeys.size} lead(s) selected
                 </p>
@@ -807,7 +811,6 @@ export default function LeadsPage() {
       </div>
 
       {/* ── Table View ── */}
-
       <Table
         aria-label="Leads table"
         selectionMode="multiple"
@@ -815,13 +818,17 @@ export default function LeadsPage() {
         radius="sm"
         shadow="none"
         classNames={{
-          tr: "dark:bg-transparent",
+          wrapper: "bg-transparent",
           th: "border-b-2 border-default bg-transparent",
         }}
         onSelectionChange={(keys) => {
           const allowedIds = new Set(
             filteredLeads
-              .filter((l) => l.assignedTo === currentUser?.id)
+              .filter(
+                (l) =>
+                  l.assignedTo === currentUser?.id ||
+                  currentUser?.role === "ADMIN",
+              )
               .map((l) => l.id),
           );
           const validSelection = new Set(
@@ -833,7 +840,7 @@ export default function LeadsPage() {
           <Card
             radius="sm"
             shadow="none"
-            className="flex flex-row w-full justify-between items-center px-2 py-2"
+            className="flex flex-row w-full justify-between items-center px-2 py-2 "
           >
             <div className="flex items-center gap-2">
               <span className="text-sm text-default-500">
@@ -980,7 +987,9 @@ export default function LeadsPage() {
                   <Eye size={16} />
                 </Button>
 
-                {lead.assignedTo === currentUser?.id && (
+                {(currentUser?.role === "ADMIN" ||
+                  (currentUser?.role === "SALES" &&
+                    lead.assignedTo === currentUser?.id)) && (
                   <>
                     <Button
                       isIconOnly
@@ -1077,7 +1086,6 @@ export default function LeadsPage() {
           ))}
         </TableBody>
       </Table>
-
       {/* ── Delete Confirmation Modal ── */}
       <Modal
         isOpen={isDeleteModalOpen}
