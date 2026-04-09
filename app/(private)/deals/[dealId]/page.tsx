@@ -33,7 +33,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useDeal } from "@/app/hooks/useDeal";
 import { useAllUser } from "@/app/hooks/useAllUsers";
-import { useServices } from "@/app/hooks/useServices";
+import { useAllServices } from "@/app/hooks/useAllServices";
 import { useCustomers } from "@/app/hooks/useCustomers";
 import { useUser } from "@/app/context/UserContext";
 import { DealStage, Service, User, Customer } from "@/app/types/types";
@@ -61,7 +61,7 @@ export default function ViewDealPage() {
   const { data: allUsers = [], isLoading: usersLoading } = useAllUser(
     currentUser?.companyId || "",
   );
-  const { data: allServices = [], isLoading: servicesLoading } = useServices(
+  const { data: allServices = [], isLoading: servicesLoading } = useAllServices(
     currentUser?.companyId || "",
   );
   const {

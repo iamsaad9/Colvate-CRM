@@ -55,7 +55,6 @@ import { useAllUser } from "@/app/hooks/useAllUsers";
 import { useAllDeals } from "@/app/hooks/useAllsDeals";
 import { Deal, DealStage, Service } from "@/app/types/types";
 import { useCustomers } from "@/app/hooks/useCustomers";
-import { useServices } from "@/app/hooks/useServices";
 
 export default function DealsPage() {
   const currentUser = useUser();

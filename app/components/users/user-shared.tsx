@@ -1,25 +1,6 @@
 // user-shared.tsx
 // Shared types, constants, helpers used across user pages
-
-export type UserRole = "ADMIN" | "MANAGER" | "SALES" | "SUPPORT";
-
-export interface User {
-  id: string;
-  companyId: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  avatarUrl?: string;
-  isActive: boolean;
-  reportsToId?: string | null;
-  createdAt: string;
-  updatedAt: string;
-  leadsCount?: number;
-  dealsCount?: number;
-  tasksCount?: number;
-  customersCount?: number;
-}
-
+import { User, UserRole } from "@/app/types/types";
 export interface UserFormData {
   name: string;
   email: string;

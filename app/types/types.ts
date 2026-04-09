@@ -3,6 +3,7 @@ export enum UserRole {
   ADMIN = "ADMIN",
   MANAGER = "MANAGER",
   SALES = "SALES",
+  SUPPORT = "SUPPORT",
 }
 
 export interface User {
@@ -14,6 +15,9 @@ export interface User {
   avatarUrl?: string | null;
   isActive: boolean;
   reportsToId?: string | null;
+  deals: Deal[];
+  leads: Lead[];
+  customers: Customer[];
   createdAt: string | Date;
   updatedAt: string | Date;
 }
@@ -74,6 +78,10 @@ export interface Service {
   description: string;
   price: number;
   isActive: boolean;
+  deals: Deal[];
+  leads: Lead[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ─── Customers ──────────────────────────────────────────────────────────────────
@@ -99,3 +107,5 @@ export interface Customer {
     avatar?: string;
   };
 }
+
+// ─── Task ──────────────────────────────────────────────────────────────────

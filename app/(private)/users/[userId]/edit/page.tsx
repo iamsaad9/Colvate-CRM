@@ -18,13 +18,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useUser } from "@/app/context/UserContext";
 import {
-  User,
   UserFormData,
-  UserRole,
   getRoleIcon,
   getRoleColor,
-  formatDate,
 } from "@/app/components/users/user-shared";
+import { useAllUser } from "@/app/hooks/useAllUsers";
+import { User, UserRole } from "@/app/types/types";
 
 export default function EditUserPage() {
   const router = useRouter();
@@ -32,7 +31,12 @@ export default function EditUserPage() {
   const userId = params.userId as string;
   const currentUser = useUser();
 
-  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const {
+    data: allUsers = [],
+    refetch: refetchAllUsers,
+    isLoading: usersLoading,
+  } = useAllUser(currentUser?.companyId || "");
+
   const [targetUser, setTargetUser] = useState<User | null>(null);
   const [formData, setFormData] = useState<UserFormData>({
     name: "",
@@ -50,32 +54,26 @@ export default function EditUserPage() {
   const isCurrentUser = userId === currentUser?.id;
 
   // Access guard
-  const canEditRole = isAdmin;
-  const canEditStatus = isAdmin && !isCurrentUser;
-  const canEditReportsTo = isAdmin;
+  const canEditRole = isAdmin || formData.reportsToId === currentUser?.id;
+  const canEditStatus = isAdmin || (formData.reportsToId && !isCurrentUser);
+  const canEditReportsTo = isAdmin || (formData.reportsToId && !isCurrentUser);
 
   useEffect(() => {
     if (!currentUser?.companyId) return;
-    fetch(`/api/users?companyId=${currentUser.companyId}`)
-      .then((r) => r.json())
-      .then((users: User[]) => {
-        setAllUsers(users);
-        const found = users.find((u) => u.id === userId);
-        if (found) {
-          setTargetUser(found);
-          setFormData({
-            name: found.name,
-            email: found.email,
-            role: found.role,
-            avatarUrl: found.avatarUrl ?? "",
-            isActive: found.isActive,
-            reportsToId: found.reportsToId ?? null,
-          });
-        }
-        setIsLoading(false);
-      })
-      .catch(console.error);
-  }, [currentUser?.companyId, userId]);
+    const found = allUsers.find((u) => u.id === userId);
+    if (found) {
+      console.log("Found:", found);
+      setTargetUser(found);
+      setFormData({
+        name: found.name,
+        email: found.email,
+        role: found.role,
+        avatarUrl: found.avatarUrl ?? "",
+        isActive: found.isActive,
+        reportsToId: found.reportsToId ?? null,
+      });
+    }
+  }, [currentUser?.companyId, userId, allUsers]);
 
   const availableManagers = useMemo(() => {
     if (isManager) return allUsers.filter((u) => u.id === currentUser?.id);
@@ -87,10 +85,11 @@ export default function EditUserPage() {
   const handleSave = async () => {
     setIsSubmitting(true);
     try {
+      console.log("Editing:", formData);
       const res = await fetch(
         `/api/users/${userId}?companyId=${currentUser?.companyId}`,
         {
-          method: "PUT",
+          method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(formData),
         },
@@ -108,7 +107,7 @@ export default function EditUserPage() {
     }
   };
 
-  if (isLoading) {
+  if (usersLoading) {
     return (
       <div className="p-6 max-w-2xl mx-auto space-y-6">
         <Skeleton className="h-10 w-48 rounded-lg" />
@@ -123,7 +122,7 @@ export default function EditUserPage() {
         <p className="text-default-400 text-lg">User not found.</p>
         <Button
           className="mt-4"
-          variant="flat"
+          variant="light"
           onPress={() => router.push("/users")}
         >
           Back to Team
@@ -139,7 +138,7 @@ export default function EditUserPage() {
         <div className="flex items-center gap-3">
           <Button
             isIconOnly
-            variant="flat"
+            variant="light"
             radius="full"
             onPress={() => router.replace(`/users/${userId}`)}
           >
@@ -183,7 +182,7 @@ export default function EditUserPage() {
         </div>
       </div>
 
-      <Card>
+      <Card radius="sm">
         <CardHeader className="pb-0">
           <h2 className="text-lg font-semibold">User Details</h2>
         </CardHeader>
@@ -192,6 +191,7 @@ export default function EditUserPage() {
             <Input
               label="Full Name"
               isRequired
+              radius="sm"
               value={formData.name}
               onValueChange={(v) => setFormData({ ...formData, name: v })}
             />
@@ -199,12 +199,14 @@ export default function EditUserPage() {
               label="Email"
               type="email"
               isRequired
+              radius="sm"
               value={formData.email}
               onValueChange={(v) => setFormData({ ...formData, email: v })}
             />
 
             <Select
               label="Role"
+              radius="sm"
               isDisabled={!canEditRole}
               selectedKeys={new Set([formData.role])}
               onSelectionChange={(keys) =>
@@ -226,6 +228,7 @@ export default function EditUserPage() {
             <Input
               label="Avatar URL (Optional)"
               placeholder="https://..."
+              radius="sm"
               value={formData.avatarUrl}
               onValueChange={(v) => setFormData({ ...formData, avatarUrl: v })}
             />
@@ -234,6 +237,7 @@ export default function EditUserPage() {
             <Select
               label="Reports To"
               placeholder="Select a manager"
+              radius="sm"
               className="md:col-span-2"
               isDisabled={!canEditReportsTo}
               selectedKeys={

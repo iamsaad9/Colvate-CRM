@@ -9,6 +9,11 @@ import {
   CardHeader,
   Chip,
   Divider,
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
   Skeleton,
 } from "@heroui/react";
 import {
@@ -18,73 +23,72 @@ import {
   Edit,
   Key,
   Mail,
-  Phone,
   Target,
   Trash2,
   UserCheck,
   UserX,
 } from "lucide-react";
-import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useUser } from "@/app/context/UserContext";
 import {
-  User,
   formatDate,
   getRoleIcon,
   getRoleColor,
 } from "@/app/components/users/user-shared";
+import { useAllUser } from "@/app/hooks/useAllUsers";
+import { useMemo, useState } from "react";
 
 export default function ViewUserPage() {
   const router = useRouter();
   const params = useParams();
   const userId = params.userId as string;
   const currentUser = useUser();
-
-  const [user, setUser] = useState<User | null>(null);
-  const [managerUser, setManagerUser] = useState<User | null>(null);
-  const [directReports, setDirectReports] = useState<User[]>([]);
-  const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const isAdmin = currentUser?.role === "ADMIN";
   const isManager = currentUser?.role === "MANAGER";
   const isCurrentUser = userId === currentUser?.id;
+  const {
+    data: allUsers = [],
+    refetch: refetchAllUsers,
+    isLoading: usersLoading,
+  } = useAllUser(currentUser?.companyId || "");
 
   const canEdit =
     isAdmin ||
     isCurrentUser ||
-    (isManager && user?.reportsToId === currentUser?.id);
+    (isManager && allUsers.find((u) => u.id === currentUser?.id));
 
-  const canDelete = isAdmin && !isCurrentUser;
+  const user = useMemo(() => {
+    if (!currentUser?.companyId) return null;
+    return allUsers.find((u) => u.id === userId) ?? null;
+  }, [currentUser?.companyId, userId, allUsers]);
 
-  useEffect(() => {
-    if (!currentUser?.companyId) return;
-    setIsLoading(true);
-    fetch(`/api/users?companyId=${currentUser.companyId}`)
-      .then((r) => r.json())
-      .then((users: User[]) => {
-        setAllUsers(users);
-        const found = users.find((u) => u.id === userId) ?? null;
-        setUser(found);
-        if (found?.reportsToId) {
-          setManagerUser(users.find((u) => u.id === found.reportsToId) ?? null);
-        }
-        setDirectReports(users.filter((u) => u.reportsToId === userId));
-      })
-      .catch(console.error)
-      .finally(() => setIsLoading(false));
-  }, [currentUser?.companyId, userId]);
+  const managerUser = useMemo(() => {
+    if (!user?.reportsToId) return null;
+    return allUsers.find((u) => u.id === user.reportsToId) ?? null;
+  }, [user, allUsers]);
+
+  const directReports = useMemo(() => {
+    if (!user?.id) return [];
+    return allUsers.filter((u) => u.reportsToId === user.id);
+  }, [user, allUsers]);
+
+  const canDelete = isAdmin && !isCurrentUser && user?.role !== "ADMIN";
 
   const handleDelete = async () => {
-    if (!confirm(`Delete ${user?.name}? This cannot be undone.`)) return;
+    if (!user) return;
+    setIsDeleting(true);
     try {
       await fetch(`/api/users/${userId}?companyId=${currentUser?.companyId}`, {
         method: "DELETE",
       });
+      refetchAllUsers();
       router.push("/users");
     } catch (err) {
       console.error(err);
     }
+    setIsDeleting(false);
   };
 
   const handleToggleStatus = async () => {
@@ -98,13 +102,16 @@ export default function ViewUserPage() {
           body: JSON.stringify({ isActive: !user.isActive }),
         },
       );
-      if (res.ok) setUser({ ...user, isActive: !user.isActive });
+      if (res.ok) {
+        refetchAllUsers();
+      }
     } catch (err) {
       console.error(err);
     }
   };
 
-  if (isLoading) {
+  console.log("All Users", allUsers);
+  if (usersLoading) {
     return (
       <div className="p-6 max-w-4xl mx-auto space-y-6">
         <Skeleton className="h-10 w-48 rounded-lg" />
@@ -143,7 +150,7 @@ export default function ViewUserPage() {
         <div className="flex items-center gap-3">
           <Button
             isIconOnly
-            variant="flat"
+            variant="light"
             radius="full"
             onPress={() => router.push("/users")}
           >
@@ -182,25 +189,29 @@ export default function ViewUserPage() {
             <Button
               variant="flat"
               color="danger"
+              radius="full"
               startContent={<Trash2 size={16} />}
-              onPress={handleDelete}
+              onPress={() => setIsDeleteModalOpen(true)}
             >
               Delete
             </Button>
           )}
-          {isAdmin && !isCurrentUser && (
-            <Button
-              variant="flat"
-              startContent={
-                user.isActive ? <UserX size={16} /> : <UserCheck size={16} />
-              }
-              onPress={handleToggleStatus}
-            >
-              {user.isActive ? "Deactivate" : "Activate"}
-            </Button>
-          )}
+          {isAdmin ||
+            (user.reportsToId == currentUser?.id && !isCurrentUser && (
+              <Button
+                variant="flat"
+                radius="full"
+                startContent={
+                  user.isActive ? <UserX size={16} /> : <UserCheck size={16} />
+                }
+                onPress={handleToggleStatus}
+              >
+                {user.isActive ? "Deactivate" : "Activate"}
+              </Button>
+            ))}
           {canEdit && (
             <Button
+              radius="full"
               color="primary"
               startContent={<Edit size={16} />}
               onPress={() => router.push(`/users/${userId}/edit`)}
@@ -214,7 +225,7 @@ export default function ViewUserPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: Profile card */}
         <div className="space-y-6">
-          <Card>
+          <Card radius="sm">
             <CardBody className="flex flex-col items-center text-center p-8">
               <Badge
                 content={!user.isActive ? <UserX size={14} /> : ""}
@@ -286,13 +297,14 @@ export default function ViewUserPage() {
           </Card>
 
           {/* Quick actions */}
-          <Card>
+          <Card radius="sm">
             <CardHeader className="pb-0">
               <h2 className="text-base font-semibold">Quick Actions</h2>
             </CardHeader>
             <CardBody className="space-y-2">
               <Button
                 fullWidth
+                radius="sm"
                 variant="flat"
                 startContent={<Mail size={16} />}
                 onPress={() => {
@@ -317,7 +329,7 @@ export default function ViewUserPage() {
         {/* Right: Stats + reports */}
         <div className="lg:col-span-2 space-y-6">
           {/* Stats */}
-          <Card>
+          <Card radius="sm">
             <CardHeader className="pb-0">
               <h2 className="text-lg font-semibold">Activity</h2>
             </CardHeader>
@@ -327,25 +339,25 @@ export default function ViewUserPage() {
                   {
                     icon: <Target size={20} />,
                     label: "Leads",
-                    value: user.leadsCount ?? 0,
+                    value: user.leads.length ?? 0,
                     color: "text-primary bg-primary-50",
                   },
                   {
                     icon: <Briefcase size={20} />,
                     label: "Deals",
-                    value: user.dealsCount ?? 0,
+                    value: user.deals.length ?? 0,
                     color: "text-success bg-success-50",
                   },
                   {
                     icon: <CheckSquare size={20} />,
                     label: "Tasks",
-                    value: user.tasksCount ?? 0,
+                    // value: user.tasksCount ?? 0,
                     color: "text-warning bg-warning-50",
                   },
                   {
                     icon: <UserCheck size={20} />,
                     label: "Customers",
-                    value: user.customersCount ?? 0,
+                    value: user.customers.length ?? 0,
                     color: "text-secondary bg-secondary-50",
                   },
                 ].map((s) => (
@@ -367,7 +379,7 @@ export default function ViewUserPage() {
           </Card>
 
           {/* Details */}
-          <Card>
+          <Card radius="sm">
             <CardHeader className="pb-0">
               <h2 className="text-lg font-semibold">Details</h2>
             </CardHeader>
@@ -408,7 +420,7 @@ export default function ViewUserPage() {
 
           {/* Direct Reports */}
           {directReports.length > 0 && (
-            <Card>
+            <Card radius="sm">
               <CardHeader className="pb-0">
                 <h2 className="text-lg font-semibold">
                   Direct Reports{" "}
@@ -451,6 +463,36 @@ export default function ViewUserPage() {
           )}
         </div>
       </div>
+      {/* Delete Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        size="sm"
+      >
+        <ModalContent>
+          <ModalHeader>Delete User</ModalHeader>
+          <ModalBody>
+            <p>
+              Are you sure you want to delete <strong>{user?.name}</strong>?
+            </p>
+            <p className="text-sm text-danger mt-2">
+              This action cannot be undone.
+            </p>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="light" onPress={() => setIsDeleteModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              isLoading={isDeleting}
+              color="danger"
+              onPress={handleDelete}
+            >
+              Delete User
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </div>
   );
 }

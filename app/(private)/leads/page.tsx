@@ -51,7 +51,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAllLeads } from "@/app/hooks/useAllLeads";
 import { useAllUser } from "@/app/hooks/useAllUsers";
-import { useServices } from "@/app/hooks/useServices";
+import { useAllServices } from "@/app/hooks/useAllServices";
 import { useUser } from "@/app/context/UserContext";
 import { Lead, LeadStatus, Service, User } from "@/app/types/types";
 
@@ -108,14 +108,9 @@ export default function LeadsPage() {
     currentUser?.companyId || "",
   );
 
-  const { data: allServices = [], isLoading: servicesLoading } = useServices(
+  const { data: allServices = [], isLoading: servicesLoading } = useAllServices(
     currentUser?.companyId || "",
   );
-
-  useEffect(() => {
-    console.log("Leads data updated:", allLeads);
-    refetchLeads();
-  }, [allLeads, refetchLeads]);
 
   // Filters ──────────────────────────────────────────────
   const [statusFilter, setStatusFilter] = useState<Set<string>>(

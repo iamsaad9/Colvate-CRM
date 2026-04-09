@@ -6,12 +6,6 @@ import {
   CardBody,
   Button,
   Input,
-  Table,
-  TableHeader,
-  TableColumn,
-  TableBody,
-  TableRow,
-  TableCell,
   Chip,
   Avatar,
   Dropdown,
@@ -33,46 +27,37 @@ import {
   Search,
   Plus,
   MoreVertical,
-  Edit,
   Trash2,
   Mail,
-  Key,
   Send,
   Download,
-  Grid,
-  List,
   Crown,
   Briefcase,
-  Headphones,
-  TrendingUp,
   Target,
   CheckSquare,
   UserCheck,
   UserX,
-  ShieldCheck,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/app/context/UserContext";
 import {
-  User,
-  UserRole,
   formatDate,
   getRoleIcon,
   getRoleColor,
   getDefaultVisibleUsers,
 } from "@/app/components/users/user-shared";
 import { useAllDeals } from "@/app/hooks/useAllsDeals";
-import { Deal, Lead } from "@/app/types/types";
+import { Deal, Lead, User, UserRole } from "@/app/types/types";
 import { useAllLeads } from "@/app/hooks/useAllLeads";
 import { useCustomers } from "@/app/hooks/useCustomers";
+import { useAllUser } from "@/app/hooks/useAllUsers";
 import { Customer } from "@prisma/client";
 
 export default function UsersListPage() {
   const router = useRouter();
   const currentUser = useUser();
 
-  const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [viewMode, setViewMode] = useState<"table" | "grid">("grid");
+  // const [allUsers, setAllUsers] = useState<User[]>([]);
   const [searchValue, setSearchValue] = useState("");
   const [page, setPage] = useState(1);
   const rowsPerPage = 12;
@@ -95,25 +80,24 @@ export default function UsersListPage() {
     currentUser?.companyId || "",
   );
 
+  const {
+    data: allUsers = [],
+    refetch: refetchAllUsers,
+    isLoading: usersLoading,
+  } = useAllUser(currentUser?.companyId || "");
+
   // Invite modal state
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteEmails, setInviteEmails] = useState("");
 
   // Delete modal state
+  const [isDeleting, setisDeleting] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   const isAdmin = currentUser?.role === "ADMIN";
   const isManager = currentUser?.role === "MANAGER";
   const canManage = isAdmin || isManager;
-
-  useEffect(() => {
-    if (!currentUser?.companyId) return;
-    fetch(`/api/users?companyId=${currentUser.companyId}`)
-      .then((r) => r.json())
-      .then(setAllUsers)
-      .catch(console.error);
-  }, [currentUser?.companyId]);
 
   // Default scoped view vs "all" toggle
   const baseUsers = useMemo(() => {
@@ -185,18 +169,20 @@ export default function UsersListPage() {
   const handleDelete = async () => {
     if (!selectedUser) return;
     try {
+      setisDeleting(true);
       await fetch(
         `/api/users/${selectedUser.id}?companyId=${currentUser?.companyId}`,
         {
           method: "DELETE",
         },
       );
-      setAllUsers((prev) => prev.filter((u) => u.id !== selectedUser.id));
       setIsDeleteModalOpen(false);
       setSelectedUser(null);
+      refetchAllUsers();
     } catch (err) {
       console.error(err);
     }
+    setisDeleting(false);
   };
 
   const handleToggleStatus = async (user: User) => {
@@ -210,11 +196,7 @@ export default function UsersListPage() {
         },
       );
       if (res.ok) {
-        setAllUsers((prev) =>
-          prev.map((u) =>
-            u.id === user.id ? { ...u, isActive: !u.isActive } : u,
-          ),
-        );
+        refetchAllUsers();
       }
     } catch (err) {
       console.error(err);
@@ -254,6 +236,7 @@ export default function UsersListPage() {
             {canManage && (
               <Button
                 variant="flat"
+                radius="full"
                 startContent={<Send size={18} />}
                 onPress={() => setIsInviteModalOpen(true)}
               >
@@ -263,13 +246,18 @@ export default function UsersListPage() {
             {canManage && (
               <Button
                 color="primary"
+                radius="full"
                 startContent={<Plus size={18} />}
                 onPress={() => router.push("/users/new")}
               >
                 Add User
               </Button>
             )}
-            <Button variant="flat" startContent={<Download size={18} />}>
+            <Button
+              variant="flat"
+              radius="full"
+              startContent={<Download size={18} />}
+            >
               Export
             </Button>
           </div>
@@ -279,7 +267,7 @@ export default function UsersListPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             {
-              label: "Total Users",
+              label: showAllUsers ? "Total Users" : "Your Team",
               value: stats.total,
               icon: <UserCheck size={24} />,
               color: "bg-primary-100 text-primary-600",
@@ -303,14 +291,14 @@ export default function UsersListPage() {
               color: "bg-warning-100 text-warning-600",
             },
           ].map((s) => (
-            <Card key={s.label}>
+            <Card key={s.label} radius="sm">
               <CardBody className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-default-500">{s.label}</p>
                     <p className="text-2xl font-bold">{s.value}</p>
                   </div>
-                  <div className={`p-3 rounded-lg ${s.color}`}>{s.icon}</div>
+                  <div className={`p-3 rounded-full ${s.color}`}>{s.icon}</div>
                 </div>
               </CardBody>
             </Card>
@@ -318,12 +306,13 @@ export default function UsersListPage() {
         </div>
 
         {/* Search + Filters */}
-        <Card>
+        <Card radius="sm">
           <CardBody>
             <div className="flex flex-col lg:flex-row gap-4">
               <Input
                 className="flex-1"
                 label="Search"
+                radius="sm"
                 placeholder="Search by name or email..."
                 startContent={<Search size={18} className="text-default-400" />}
                 value={searchValue}
@@ -332,18 +321,10 @@ export default function UsersListPage() {
               />
               <div className="flex gap-2 flex-wrap">
                 {/* Show All toggle — only for non-admins (admins always see all by default) */}
-                {!isAdmin && (
-                  <Button
-                    variant={showAllUsers ? "solid" : "flat"}
-                    color={showAllUsers ? "primary" : "default"}
-                    onPress={() => setShowAllUsers((v) => !v)}
-                  >
-                    {showAllUsers ? "My Team" : "All Users"}
-                  </Button>
-                )}
 
                 <Select
                   label="Role"
+                  radius="sm"
                   className="w-40"
                   selectedKeys={roleFilter}
                   onSelectionChange={(k) => setRoleFilter(k as Set<string>)}
@@ -358,6 +339,7 @@ export default function UsersListPage() {
 
                 <Select
                   label="Status"
+                  radius="sm"
                   className="w-40"
                   selectedKeys={statusFilter}
                   onSelectionChange={(k) => setStatusFilter(k as Set<string>)}
@@ -368,9 +350,21 @@ export default function UsersListPage() {
                   <SelectItem key="inactive">Inactive</SelectItem>
                 </Select>
 
+                {!isAdmin && (
+                  <Button
+                    variant={showAllUsers ? "solid" : "light"}
+                    color={showAllUsers ? "primary" : "default"}
+                    radius="sm"
+                    onPress={() => setShowAllUsers((v) => !v)}
+                  >
+                    {showAllUsers ? "My Team" : "All Users"}
+                  </Button>
+                )}
+
                 {activeFiltersCount > 0 && (
                   <Button
                     variant="flat"
+                    color="danger"
                     onPress={() => {
                       setRoleFilter(new Set(["all"]));
                       setStatusFilter(new Set(["all"]));
@@ -393,111 +387,117 @@ export default function UsersListPage() {
 
           return (
             <Card
+              radius="sm"
               key={user.id}
-              className={`relative ${isCurrentUser ? "border-2 border-primary shadow-lg" : ""}`}
-              isPressable
-              onPress={() => router.push(`/users/${user.id}`)}
+              className={`relative hover:scale-102 active:scale-98 ${isCurrentUser ? "border-2 border-primary shadow-lg" : ""}`}
             >
               <CardBody className="p-6">
-                {isCurrentUser && (
-                  <Chip
-                    size="sm"
-                    color="primary"
-                    variant="flat"
-                    className="absolute top-3 right-3"
-                  >
-                    You
-                  </Chip>
-                )}
+                <div
+                  className="cursor-pointer"
+                  onClick={() => router.push(`/users/${user.id}`)}
+                >
+                  {isCurrentUser && (
+                    <Chip
+                      size="sm"
+                      color="primary"
+                      variant="flat"
+                      className="absolute top-3 right-3"
+                    >
+                      You
+                    </Chip>
+                  )}
 
-                <div className="flex flex-col items-center text-center mb-4">
-                  <Badge
-                    content={!user.isActive ? <UserX size={14} /> : ""}
-                    color="danger"
-                    placement="bottom-right"
-                    isInvisible={user.isActive}
-                  >
-                    <Avatar
-                      src={user.avatarUrl}
-                      name={user.name}
-                      className="w-16 h-16 text-large"
-                    />
-                  </Badge>
-                  <h3 className="font-semibold text-lg mt-3">{user.name}</h3>
-                  <p className="text-xs text-default-500 truncate w-full">
-                    {user.email}
-                  </p>
-                  <Chip
-                    size="sm"
-                    variant="flat"
-                    color={getRoleColor(user.role)}
-                    startContent={getRoleIcon(user.role)}
-                    className="mt-2"
-                  >
-                    {user.role}
-                  </Chip>
                   {!user.isActive && (
                     <Chip
                       size="sm"
-                      color="danger"
-                      variant="flat"
-                      className="mt-1"
+                      variant="dot"
+                      color={"danger"}
+                      className="absolute top-3 right-3"
                     >
                       Inactive
                     </Chip>
                   )}
-                  {managerUser && (
+
+                  <div className="flex flex-col items-center text-center mb-4">
+                    <Badge
+                      content={!user.isActive ? <UserX size={14} /> : ""}
+                      color="danger"
+                      placement="bottom-right"
+                      isInvisible={user.isActive}
+                    >
+                      <Avatar
+                        src={user.avatarUrl}
+                        name={user.name}
+                        className="w-16 h-16 text-large"
+                      />
+                    </Badge>
+                    <h3 className="font-semibold text-lg mt-3">{user.name}</h3>
+                    <p className="text-xs text-default-500 truncate w-full">
+                      {user.email}
+                    </p>
+                    <Chip
+                      size="sm"
+                      variant="flat"
+                      color={getRoleColor(user.role)}
+                      startContent={getRoleIcon(user.role)}
+                      className="mt-2"
+                    >
+                      {user.role}
+                    </Chip>
+
                     <p className="text-xs text-default-400 mt-1">
                       Reports to:{" "}
-                      <span className="font-medium">{managerUser.name}</span>
+                      <span className="font-medium">
+                        {managerUser?.name || "Unsassigned"}
+                      </span>
                     </p>
-                  )}
-                </div>
+                  </div>
 
-                <Divider className="my-3" />
+                  <Divider className="my-3" />
 
-                <div className="grid grid-cols-2 gap-2 mb-3 text-center">
-                  {[
-                    {
-                      icon: <Target size={12} />,
-                      label: "Leads",
-                      value: allLeads.filter(
-                        (d: Lead) => d.assignedTo === user.id,
-                      ).length,
-                    },
-                    {
-                      icon: <Briefcase size={12} />,
-                      label: "Deals",
-                      value: allDeals.filter(
-                        (d: Deal) => d.assignedTo === user.id,
-                      ).length,
-                    },
-                    {
-                      icon: <CheckSquare size={12} />,
-                      label: "Tasks",
-                      value: user.tasksCount ?? 0,
-                    },
-                    {
-                      icon: <UserCheck size={12} />,
-                      label: "Customers",
-                      value: allCustomers.filter(
-                        (d: Customer) => d.assignedTo === user.id,
-                      ).length,
-                    },
-                  ].map((s) => (
-                    <div key={s.label}>
-                      <div className="flex items-center justify-center gap-1 text-default-400 mb-0.5">
-                        {s.icon}
-                        <p className="text-[10px]">{s.label}</p>
+                  <div className="grid grid-cols-2 gap-2 mb-3 text-center">
+                    {[
+                      {
+                        icon: <Target size={12} />,
+                        label: "Leads",
+                        value: allLeads.filter(
+                          (d: Lead) => d.assignedTo === user.id,
+                        ).length,
+                      },
+                      {
+                        icon: <Briefcase size={12} />,
+                        label: "Deals",
+                        value: allDeals.filter(
+                          (d: Deal) => d.assignedTo === user.id,
+                        ).length,
+                      },
+                      {
+                        icon: <CheckSquare size={12} />,
+                        label: "Tasks",
+                        value: user.tasksCount ?? 0,
+                      },
+                      {
+                        icon: <UserCheck size={12} />,
+                        label: "Customers",
+                        value: allCustomers.filter(
+                          (d: Customer) => d.assignedTo === user.id,
+                        ).length,
+                      },
+                    ].map((s) => (
+                      <div key={s.label}>
+                        <div className="flex items-center justify-center gap-1 text-default-400 mb-0.5">
+                          {s.icon}
+                          <p className="text-[10px]">{s.label}</p>
+                        </div>
+                        <p className="font-bold text-sm">{s.value}</p>
                       </div>
-                      <p className="font-bold text-sm">{s.value}</p>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
 
-                <p className="text-[10px] text-default-400 text-center mb-3">
-                  Joined {formatDate(user.createdAt)}
-                </p>
+                  <p className="text-[10px] text-default-400 text-center mb-3">
+                    Joined {formatDate(user.createdAt)}
+                  </p>
+                </div>
 
                 {editable && (
                   <div className="flex gap-2">
@@ -633,7 +633,11 @@ export default function UsersListPage() {
             <Button variant="light" onPress={() => setIsDeleteModalOpen(false)}>
               Cancel
             </Button>
-            <Button color="danger" onPress={handleDelete}>
+            <Button
+              isLoading={isDeleting}
+              color="danger"
+              onPress={handleDelete}
+            >
               Delete User
             </Button>
           </ModalFooter>

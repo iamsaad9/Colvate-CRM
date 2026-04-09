@@ -12,56 +12,37 @@ import {
   Switch,
   Skeleton,
 } from "@heroui/react";
-import {
-  ArrowLeft,
-  Briefcase,
-  Crown,
-  Headphones,
-  Save,
-  ShieldCheck,
-  X,
-} from "lucide-react";
+import { ArrowLeft, Save, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/app/context/UserContext";
+import { User, UserRole } from "@/app/types/types";
 import {
-  User,
   UserFormData,
-  UserRole,
   EMPTY_USER_FORM,
   getRoleIcon,
 } from "@/app/components/users/user-shared";
-import { report } from "process";
+import { useAllUser } from "@/app/hooks/useAllUsers";
 
 export default function NewUserPage() {
   const router = useRouter();
   const currentUser = useUser();
 
-  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const {
+    data: allUsers = [],
+    refetch: refetchAllUsers,
+    isLoading: usersLoading,
+  } = useAllUser(currentUser?.companyId || "");
+
   const [formData, setFormData] = useState<UserFormData>({
     ...EMPTY_USER_FORM,
-    // If a manager is creating, default reportsToId to themselves
     reportsToId: currentUser?.role === "MANAGER" ? currentUser.id : null,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
 
   const isAdmin = currentUser?.role === "ADMIN";
   const isManager = currentUser?.role === "MANAGER";
 
-  useEffect(() => {
-    if (!currentUser?.companyId) return;
-    fetch(`/api/users?companyId=${currentUser.companyId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        setAllUsers(data);
-        setIsLoading(false);
-      })
-      .catch(console.error);
-  }, [currentUser?.companyId]);
-
-  // Managers can only assign their team to themselves
-  // Admins can assign to any admin/manager
   const availableManagers = useMemo(() => {
     if (isManager) return allUsers.filter((u) => u.id === currentUser?.id);
     return allUsers.filter((u) => u.role === "ADMIN" || u.role === "MANAGER");
@@ -86,6 +67,7 @@ export default function NewUserPage() {
       });
       if (res.ok) {
         const created = await res.json();
+        await refetchAllUsers();
         router.replace(`/users/${created.id}`);
       } else {
         const err = await res.json();
@@ -98,7 +80,7 @@ export default function NewUserPage() {
     }
   };
 
-  if (isLoading) {
+  if (usersLoading) {
     return (
       <div className="p-6 max-w-2xl mx-auto space-y-6">
         <Skeleton className="h-10 w-48 rounded-lg" />
@@ -114,7 +96,7 @@ export default function NewUserPage() {
         <div className="flex items-center gap-3">
           <Button
             isIconOnly
-            variant="flat"
+            variant="light"
             radius="full"
             onPress={() => router.push("/users")}
           >
@@ -144,7 +126,7 @@ export default function NewUserPage() {
         </div>
       </div>
 
-      <Card>
+      <Card radius="sm">
         <CardHeader className="pb-0">
           <h2 className="text-lg font-semibold">User Details</h2>
         </CardHeader>
@@ -154,6 +136,7 @@ export default function NewUserPage() {
               label="Full Name"
               placeholder="Jane Smith"
               isRequired
+              radius="sm"
               value={formData.name}
               onValueChange={(v) => setFormData({ ...formData, name: v })}
             />
@@ -162,6 +145,7 @@ export default function NewUserPage() {
               type="email"
               placeholder="jane@company.com"
               isRequired
+              radius="sm"
               value={formData.email}
               onValueChange={(v) => setFormData({ ...formData, email: v })}
             />
@@ -169,6 +153,7 @@ export default function NewUserPage() {
             {/* Managers can only create SALES/SUPPORT users under them */}
             <Select
               label="Role"
+              radius="sm"
               selectedKeys={new Set([formData.role])}
               onSelectionChange={(keys) =>
                 setFormData({
@@ -190,6 +175,7 @@ export default function NewUserPage() {
             <Input
               label="Avatar URL (Optional)"
               placeholder="https://..."
+              radius="sm"
               value={formData.avatarUrl}
               onValueChange={(v) => setFormData({ ...formData, avatarUrl: v })}
             />
@@ -197,6 +183,7 @@ export default function NewUserPage() {
             {/* Reports To */}
             <Select
               label="Reports To"
+              radius="sm"
               placeholder={isManager ? "You (default)" : "Select a manager"}
               className="md:col-span-2"
               isDisabled={isManager} // managers always report to themselves

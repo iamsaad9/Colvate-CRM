@@ -7,310 +7,120 @@ import {
   CardHeader,
   Chip,
   Divider,
-  Input,
   Skeleton,
-  Switch,
-  Textarea,
-  User as UserComponent,
 } from "@heroui/react";
 import {
   ArrowLeft,
-  BadgeDollarSign,
-  BarChart3,
+  Briefcase,
+  Clock,
+  DollarSign,
   Edit,
-  Layers,
-  Save,
-  Tag,
+  Package,
+  Target,
+  ToggleLeft,
+  ToggleRight,
   Trash2,
   TrendingUp,
-  X,
-  FileText,
-  CheckCircle2,
-  Clock,
-  Handshake,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useServices } from "@/app/hooks/useServices";
+import { useParams, useRouter } from "next/navigation";
 import { useUser } from "@/app/context/UserContext";
+import {
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+} from "@heroui/react";
+import { Service } from "@/app/types/types";
+import {
+  formatCurrency,
+  formatDate,
+} from "@/app/components/comp_services/service-shared";
+import { useService } from "@/app/hooks/useService";
+import { useAllServices } from "@/app/hooks/useAllServices";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface FormData {
-  name: string;
-  description: string;
-  price: number;
-  isActive: boolean;
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const formatCurrency = (value?: number | string) => {
-  const num = Number(value);
-  if (isNaN(num)) return "$0";
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(num);
-};
-
-const formatDate = (dateStr?: string | null) => {
-  if (!dateStr) return "-";
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-};
-
-const DEAL_STAGE_META: Record<
-  string,
-  {
-    color: "default" | "primary" | "warning" | "success" | "danger";
-    label: string;
-  }
-> = {
-  PROSPECT: { color: "primary", label: "Prospect" },
-  NEGOTIATION: { color: "warning", label: "Negotiation" },
-  WON: { color: "success", label: "Won" },
-  LOST: { color: "danger", label: "Lost" },
-};
-
-const LEAD_STATUS_META: Record<
-  string,
-  {
-    color: "default" | "primary" | "secondary" | "success" | "danger";
-    label: string;
-  }
-> = {
-  NEW: { color: "primary", label: "New" },
-  CONTACTED: { color: "secondary", label: "Contacted" },
-  QUALIFIED: { color: "success", label: "Qualified" },
-  LOST: { color: "danger", label: "Lost" },
-};
-
-// ─── Stat Card ────────────────────────────────────────────────────────────────
-
-function StatCard({
-  icon,
-  label,
-  value,
-  sub,
-  color = "default",
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-  sub?: string;
-  color?: "default" | "success" | "primary" | "warning";
-}) {
-  const colorMap = {
-    default: "bg-default-100 text-default-600",
-    success: "bg-success/10 text-success",
-    primary: "bg-primary/10 text-primary",
-    warning: "bg-warning/10 text-warning",
-  };
-
-  return (
-    <div className="flex items-center gap-3 p-4 rounded-xl border border-divider bg-default-50">
-      <div
-        className={`w-10 h-10 rounded-lg flex items-center justify-center ${colorMap[color]}`}
-      >
-        {icon}
-      </div>
-      <div>
-        <p className="text-xs text-default-400">{label}</p>
-        <p className="font-bold text-lg leading-tight">{value}</p>
-        {sub && <p className="text-xs text-default-400">{sub}</p>}
-      </div>
-    </div>
-  );
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
-export default function ServiceDetailPage() {
+export default function ViewServicePage() {
   const router = useRouter();
   const params = useParams();
-  const searchParams = useSearchParams();
-
   const serviceId = params.serviceId as string;
-  const isNew = serviceId === "new";
-  const editParam = searchParams.get("edit") === "true";
-
-  const [isEditing, setIsEditing] = useState(isNew || editParam);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
   const currentUser = useUser();
 
   const {
     data: service,
     isLoading: serviceLoading,
     refetch: refetchService,
-  } = useServices(isNew ? null : serviceId);
+  } = useService(serviceId, currentUser?.companyId || "");
 
-  const [formData, setFormData] = useState<FormData>({
-    name: "",
-    description: "",
-    price: 0,
-    isActive: true,
-  });
-
-  useEffect(() => {
-    if (service) {
-      setFormData({
-        name: service.name ?? "",
-        description: service.description ?? "",
-        price: service.price ?? 0,
-        isActive: service.isActive ?? true,
-      });
-    }
-  }, [service]);
-
-  // ── Derived stats ──────────────────────────────────────────────────────────
-
-  const totalLeads = service?._count?.leads ?? service?.leads?.length ?? 0;
-  const totalDeals = service?._count?.deals ?? service?.deals?.length ?? 0;
-  const wonDeals = service?.deals?.filter((d) => d.stage === "WON") ?? [];
-  const totalRevenue = wonDeals.reduce((sum, d) => sum + Number(d.value), 0);
-  const activeDeals =
-    service?.deals?.filter(
-      (d) => d.stage === "PROSPECT" || d.stage === "NEGOTIATION",
-    ) ?? [];
-  const pipelineValue = activeDeals.reduce(
-    (sum, d) => sum + Number(d.value),
-    0,
+  const { refetch: refetchServices } = useAllServices(
+    currentUser?.companyId || "",
   );
 
-  // ── Handlers ───────────────────────────────────────────────────────────────
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
-  const handleSave = async () => {
-    setIsSubmitting(true);
+  const isAdmin =
+    currentUser?.role === "ADMIN" || currentUser?.role === "MANAGER";
+
+  useEffect(() => {
+    refetchService();
+  }, [refetchService]);
+
+  const handleToggleStatus = async () => {
+    if (!service) return;
     try {
-      const payload = {
-        name: formData.name,
-        description: formData.description || null,
-        price: parseFloat(formData.price) || 0,
-        isActive: formData.isActive,
-        companyId: currentUser?.companyId,
-      };
-
-      console.log("Service payload to save:", payload);
-
-      if (isNew) {
-        const res = await fetch("/api/services", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (res.ok) {
-          const created = await res.json();
-          // router.replace(`/services/${created.id}`);
-        } else {
-          const err = await res.json();
-          alert(`Error: ${err.error}`);
-        }
-      } else {
-        const res = await fetch(`/api/services/${serviceId}`, {
+      const res = await fetch(
+        `/api/services/${serviceId}?companyId=${currentUser?.companyId}`,
+        {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (res.ok) {
-          await refetchService();
-          setIsEditing(false);
-          // router.replace(`/services/${serviceId}`);
-        } else {
-          const err = await res.json();
-          alert(`Error: ${err.error}`);
-        }
+          body: JSON.stringify({ isActive: !service.isActive }),
+        },
+      );
+      if (res.ok) {
+        refetchService();
+        refetchServices();
       }
     } catch (err) {
       console.error(err);
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!confirm(`Delete "${service?.name}"? This cannot be undone.`)) return;
     try {
-      const res = await fetch(`/api/services/${serviceId}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        router.push("/services");
-      } else {
-        const err = await res.json();
-        alert(`Error: ${err.error}`);
-      }
+      await fetch(
+        `/api/services/${serviceId}?companyId=${currentUser?.companyId}`,
+        { method: "DELETE" },
+      );
+      await refetchServices();
+      router.push("/company-services");
     } catch (err) {
       console.error(err);
     }
   };
 
-  const handleToggleActive = async () => {
-    try {
-      await fetch(`/api/services/${serviceId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: !service?.isActive }),
-      });
-      await refetchService();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleCancel = () => {
-    if (isNew) {
-      router.push("/services");
-    } else {
-      if (service) {
-        setFormData({
-          name: service.name ?? "",
-          description: service.description ?? "",
-          price: service.price ?? 0,
-          isActive: service.isActive ?? true,
-        });
-      }
-      setIsEditing(false);
-      router.replace(`/services/${serviceId}`);
-    }
-  };
-
-  // ── Loading ────────────────────────────────────────────────────────────────
-
-  if (!isNew && serviceLoading) {
+  if (serviceLoading) {
     return (
-      <div className="p-6 max-w-5xl mx-auto space-y-6">
+      <div className="p-6 max-w-4xl mx-auto space-y-6">
         <Skeleton className="h-10 w-48 rounded-lg" />
-        <div className="grid grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-20 rounded-xl" />
-          ))}
-        </div>
         <div className="grid grid-cols-3 gap-6">
+          <Skeleton className="h-64 rounded-xl" />
           <div className="col-span-2 space-y-4">
-            <Skeleton className="h-48 rounded-xl" />
-            <Skeleton className="h-64 rounded-xl" />
+            <Skeleton className="h-40 rounded-xl" />
+            <Skeleton className="h-40 rounded-xl" />
           </div>
-          <Skeleton className="h-80 rounded-xl" />
         </div>
       </div>
     );
   }
 
-  if (!isNew && !service) {
+  if (!service) {
     return (
-      <div className="p-6 max-w-5xl mx-auto text-center py-24">
+      <div className="p-6 max-w-4xl mx-auto text-center py-24">
         <p className="text-default-400 text-lg">Service not found.</p>
         <Button
           className="mt-4"
           variant="flat"
-          onPress={() => router.push("/services")}
+          onPress={() => router.push("/company-services")}
         >
           Back to Services
         </Button>
@@ -318,498 +128,273 @@ export default function ServiceDetailPage() {
     );
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  const estimatedRevenue = Number(service.price) * (service.dealsCount ?? 0);
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
-      {/* ── Header ── */}
+    <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
           <Button
             isIconOnly
-            variant="flat"
+            variant="light"
             radius="full"
-            onPress={() => router.push("/services")}
+            onPress={() => router.push("/company-services")}
           >
             <ArrowLeft size={18} />
           </Button>
           <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-bold">
-                {isNew
-                  ? "New Service"
-                  : isEditing
-                    ? "Edit Service"
-                    : service?.name}
-              </h1>
-              {!isNew && (
-                <Chip
-                  size="sm"
-                  color={service?.isActive ? "success" : "default"}
-                  variant="flat"
-                >
-                  {service?.isActive ? "Active" : "Inactive"}
-                </Chip>
-              )}
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold">{service.name}</h1>
+              <Chip
+                size="sm"
+                variant="dot"
+                color={service.isActive ? "success" : "danger"}
+              >
+                {service.isActive ? "Active" : "Inactive"}
+              </Chip>
             </div>
-            {!isNew && (
-              <p className="text-default-400 text-sm mt-0.5">
-                Created {formatDate(service?.createdAt)} · Updated{" "}
-                {formatDate(service?.updatedAt)}
-              </p>
-            )}
+            <p className="text-default-400 text-sm mt-0.5">
+              Created {formatDate(service.createdAt)} · Updated{" "}
+              {formatDate(service.updatedAt)}
+            </p>
           </div>
         </div>
 
-        <div className="flex gap-2 flex-shrink-0">
-          {isEditing ? (
-            <>
-              <Button
-                variant="flat"
-                radius="full"
-                startContent={<X size={16} />}
-                onPress={handleCancel}
-              >
-                Cancel
-              </Button>
-              <Button
-                color="primary"
-                radius="full"
-                startContent={<Save size={16} />}
-                onPress={handleSave}
-                isLoading={isSubmitting}
-                isDisabled={!formData.name || !formData.price}
-              >
-                {isNew ? "Create Service" : "Save Changes"}
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                variant="flat"
-                radius="full"
-                color="danger"
-                startContent={<Trash2 size={16} />}
-                onPress={handleDelete}
-              >
-                Delete
-              </Button>
-              <Button
-                color="primary"
-                radius="full"
-                startContent={<Edit size={16} />}
-                onPress={() => setIsEditing(true)}
-              >
-                Edit Service
-              </Button>
-            </>
-          )}
-        </div>
+        {isAdmin && (
+          <div className="flex gap-2 flex-shrink-0">
+            <Button
+              variant="flat"
+              radius="full"
+              color="danger"
+              startContent={<Trash2 size={16} />}
+              onPress={() => setIsDeleteModalOpen(true)}
+            >
+              Delete
+            </Button>
+            <Button
+              variant="flat"
+              radius="full"
+              startContent={
+                service.isActive ? (
+                  <ToggleLeft size={16} />
+                ) : (
+                  <ToggleRight size={16} />
+                )
+              }
+              onPress={handleToggleStatus}
+            >
+              {service.isActive ? "Deactivate" : "Activate"}
+            </Button>
+            <Button
+              color="primary"
+              radius="full"
+              startContent={<Edit size={16} />}
+              onPress={() => router.push(`/company-services/${serviceId}/edit`)}
+            >
+              Edit Service
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* ── Stats Row (view mode only) ── */}
-      {!isNew && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard
-            icon={<BadgeDollarSign size={18} />}
-            label="List Price"
-            value={formatCurrency(service?.price)}
-            color="success"
-          />
-          <StatCard
-            icon={<TrendingUp size={18} />}
-            label="Linked Leads"
-            value={totalLeads.toString()}
-            sub="across all statuses"
-            color="primary"
-          />
-          <StatCard
-            icon={<Handshake size={18} />}
-            label="Active Pipeline"
-            value={formatCurrency(pipelineValue)}
-            sub={`${activeDeals.length} open deal${activeDeals.length !== 1 ? "s" : ""}`}
-            color="warning"
-          />
-          <StatCard
-            icon={<BarChart3 size={18} />}
-            label="Revenue Won"
-            value={formatCurrency(totalRevenue)}
-            sub={`${wonDeals.length} deal${wonDeals.length !== 1 ? "s" : ""} closed`}
-            color="success"
-          />
-        </div>
-      )}
-
-      {/* ── Main Layout ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* ── Left column ── */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Core details */}
-          <Card>
-            <CardHeader className="pb-0">
-              <h2 className="text-lg font-semibold">Service Details</h2>
-            </CardHeader>
-            <CardBody>
-              {isEditing ? (
-                <div className="space-y-4">
-                  <Input
-                    label="Service Name"
-                    placeholder="e.g. SEO Audit, Monthly Retainer…"
-                    isRequired
-                    value={formData.name}
-                    onValueChange={(v) => setFormData({ ...formData, name: v })}
-                  />
-                  <Textarea
-                    label="Description"
-                    placeholder="What does this service include? Who is it for?"
-                    minRows={3}
-                    value={formData.description}
-                    onValueChange={(v) =>
-                      setFormData({ ...formData, description: v })
-                    }
-                  />
-                  <Input
-                    label="Price"
-                    placeholder="0"
-                    type="number"
-                    min="0"
-                    isRequired
-                    startContent={
-                      <span className="text-default-400 text-sm">$</span>
-                    }
-                    value={formData.price.toString()}
-                    onValueChange={(v) =>
-                      setFormData({ ...formData, price: parseFloat(v) || 0 })
-                    }
-                    description="This will be used as the default value when creating deals."
-                  />
-                  <div className="flex items-center justify-between p-3 rounded-xl border border-divider bg-default-50">
-                    <div>
-                      <p className="text-sm font-medium">Active</p>
-                      <p className="text-xs text-default-400">
-                        Inactive services cannot be linked to new leads or
-                        deals.
-                      </p>
-                    </div>
-                    <Switch
-                      isSelected={formData.isActive}
-                      onValueChange={(v) =>
-                        setFormData({ ...formData, isActive: v })
-                      }
-                      color="success"
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-5">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="text-xs text-default-400 mb-1">Name</p>
-                      <p className="font-semibold text-lg">{service?.name}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-default-400 mb-1">Price</p>
-                      <p className="font-bold text-2xl text-success">
-                        {formatCurrency(service?.price)}
-                      </p>
-                    </div>
-                  </div>
-
-                  {service?.description && (
-                    <>
-                      <Divider />
-                      <div>
-                        <p className="text-xs text-default-400 mb-2 flex items-center gap-1">
-                          <FileText size={11} /> Description
-                        </p>
-                        <p className="text-sm text-default-600 leading-relaxed whitespace-pre-wrap">
-                          {service.description}
-                        </p>
-                      </div>
-                    </>
-                  )}
-                </div>
+        {/* Left */}
+        <div className="space-y-6">
+          {/* Identity card */}
+          <Card radius="sm">
+            <CardBody className="flex flex-col items-center text-center p-8">
+              <div className="w-20 h-20 rounded-2xl bg-primary-100 flex items-center justify-center mb-4">
+                <Package size={36} className="text-primary-600" />
+              </div>
+              <h2 className="text-xl font-bold">{service.name}</h2>
+              {service.description && (
+                <p className="text-default-500 text-sm mt-2">
+                  {service.description}
+                </p>
               )}
+              <Divider className="my-4 w-full" />
+              <p className="text-3xl font-bold text-success">
+                {formatCurrency(service.price)}
+              </p>
+              <p className="text-xs text-default-400 mt-1">per unit</p>
             </CardBody>
           </Card>
 
-          {/* Deals table (view mode) */}
-          {!isNew && !isEditing && (
-            <Card>
-              <CardHeader className="flex justify-between items-center pb-0">
-                <h2 className="text-lg font-semibold">
-                  Deals
-                  {totalDeals > 0 && (
-                    <span className="ml-2 text-sm font-normal text-default-400">
-                      ({totalDeals})
-                    </span>
-                  )}
-                </h2>
-                <Button
-                  size="sm"
-                  variant="flat"
-                  color="primary"
-                  onPress={() =>
-                    router.push(`/deals/new?serviceId=${serviceId}`)
-                  }
-                >
-                  + New Deal
-                </Button>
-              </CardHeader>
-              <CardBody>
-                {service?.deals && service.deals.length > 0 ? (
-                  <div className="space-y-2">
-                    {service.deals.map((deal) => (
-                      <div
-                        key={deal.id}
-                        onClick={() => router.push(`/deals/${deal.id}`)}
-                        className="flex items-center justify-between p-3 rounded-xl border border-divider hover:bg-default-50 cursor-pointer transition-colors"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-8 h-8 rounded-lg bg-default-100 flex items-center justify-center flex-shrink-0">
-                            <Handshake size={14} className="text-default-400" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-medium text-sm truncate">
-                              {deal.title}
-                            </p>
-                            {deal.customer && (
-                              <p className="text-xs text-default-400 truncate">
-                                {deal.customer.name}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3 flex-shrink-0">
-                          <p className="font-semibold text-sm text-success">
-                            {formatCurrency(deal.value)}
-                          </p>
-                          <Chip
-                            size="sm"
-                            variant="flat"
-                            color={
-                              DEAL_STAGE_META[deal.stage]?.color ?? "default"
-                            }
-                          >
-                            {DEAL_STAGE_META[deal.stage]?.label ?? deal.stage}
-                          </Chip>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-default-300">
-                    <Handshake size={32} className="mx-auto mb-2 opacity-40" />
-                    <p className="text-sm">No deals linked yet.</p>
-                  </div>
-                )}
-              </CardBody>
-            </Card>
-          )}
-
-          {/* Leads table (view mode) */}
-          {!isNew && !isEditing && (
-            <Card>
-              <CardHeader className="flex justify-between items-center pb-0">
-                <h2 className="text-lg font-semibold">
-                  Leads
-                  {totalLeads > 0 && (
-                    <span className="ml-2 text-sm font-normal text-default-400">
-                      ({totalLeads})
-                    </span>
-                  )}
-                </h2>
-              </CardHeader>
-              <CardBody>
-                {service?.leads && service.leads.length > 0 ? (
-                  <div className="space-y-2">
-                    {service.leads.map((lead) => (
-                      <div
-                        key={lead.id}
-                        onClick={() => router.push(`/leads/${lead.id}`)}
-                        className="flex items-center justify-between p-3 rounded-xl border border-divider hover:bg-default-50 cursor-pointer transition-colors"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-8 h-8 rounded-lg bg-default-100 flex items-center justify-center flex-shrink-0">
-                            <TrendingUp
-                              size={14}
-                              className="text-default-400"
-                            />
-                          </div>
-                          <p className="font-medium text-sm truncate">
-                            {lead.name}
-                          </p>
-                        </div>
-                        <Chip
-                          size="sm"
-                          variant="flat"
-                          color={
-                            LEAD_STATUS_META[lead.status]?.color ?? "default"
-                          }
-                        >
-                          {LEAD_STATUS_META[lead.status]?.label ?? lead.status}
-                        </Chip>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-default-300">
-                    <TrendingUp size={32} className="mx-auto mb-2 opacity-40" />
-                    <p className="text-sm">No leads linked yet.</p>
-                  </div>
-                )}
-              </CardBody>
-            </Card>
-          )}
-        </div>
-
-        {/* ── Right sidebar ── */}
-        <div className="space-y-6">
-          {/* Status card */}
-          <Card>
+          {/* Details card */}
+          <Card radius="sm">
             <CardHeader className="pb-0">
-              <h2 className="text-lg font-semibold">Status</h2>
+              <h2 className="text-base font-semibold">Details</h2>
             </CardHeader>
             <CardBody className="space-y-4">
-              {isEditing ? (
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">Active</p>
-                    <p className="text-xs text-default-400">
-                      Available for leads & deals
-                    </p>
-                  </div>
-                  <Switch
-                    isSelected={formData.isActive}
-                    onValueChange={(v) =>
-                      setFormData({ ...formData, isActive: v })
-                    }
-                    color="success"
-                  />
+              <div>
+                <p className="text-xs text-default-400 mb-1">Status</p>
+                <Chip
+                  size="sm"
+                  variant="dot"
+                  color={service.isActive ? "success" : "danger"}
+                >
+                  {service.isActive ? "Active" : "Inactive"}
+                </Chip>
+              </div>
+              <div>
+                <p className="text-xs text-default-400 mb-1">Price</p>
+                <p className="font-bold text-success">
+                  {formatCurrency(service.price)}
+                </p>
+              </div>
+              <Divider />
+              <div>
+                <p className="text-xs text-default-400 mb-1">Created</p>
+                <div className="flex items-center gap-1 text-sm">
+                  <Clock size={13} className="text-default-400" />
+                  {formatDate(service.createdAt)}
                 </div>
-              ) : (
-                <>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">
-                        {service?.isActive ? "Active" : "Inactive"}
-                      </p>
-                      <p className="text-xs text-default-400">
-                        {service?.isActive
-                          ? "Available for new leads & deals"
-                          : "Hidden from new leads & deals"}
-                      </p>
+              </div>
+              <div>
+                <p className="text-xs text-default-400 mb-1">Last Updated</p>
+                <div className="flex items-center gap-1 text-sm">
+                  <Clock size={13} className="text-default-400" />
+                  {formatDate(service.updatedAt)}
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+        </div>
+
+        {/* Right */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Stats */}
+          <Card radius="sm">
+            <CardHeader className="pb-0">
+              <h2 className="text-lg font-semibold">Performance</h2>
+            </CardHeader>
+            <CardBody>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[
+                  {
+                    icon: <Target size={24} />,
+                    label: "Linked Leads",
+                    value: service.leadsCount ?? 0,
+                    color: "bg-primary-50 text-primary-600",
+                    sub: "prospects",
+                  },
+                  {
+                    icon: <Briefcase size={24} />,
+                    label: "Active Deals",
+                    value: service.dealsCount ?? 0,
+                    color: "bg-warning-50 text-warning-600",
+                    sub: "opportunities",
+                  },
+                  {
+                    icon: <DollarSign size={24} />,
+                    label: "Est. Revenue",
+                    value: formatCurrency(estimatedRevenue),
+                    color: "bg-success-50 text-success-600",
+                    sub: "from closed deals",
+                  },
+                ].map((s) => (
+                  <div
+                    key={s.label}
+                    className="text-center p-5 rounded-xl bg-default-50"
+                  >
+                    <div
+                      className={`w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 ${s.color}`}
+                    >
+                      {s.icon}
                     </div>
-                    <Switch
-                      isSelected={service?.isActive ?? false}
-                      onValueChange={handleToggleActive}
-                      color="success"
-                    />
+                    <p className="text-2xl font-bold">{s.value}</p>
+                    <p className="text-sm font-medium">{s.label}</p>
+                    <p className="text-xs text-default-400">{s.sub}</p>
                   </div>
-                  <Divider />
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-xs text-default-400 mb-1">Created</p>
-                      <div className="flex items-center gap-1.5 text-sm">
-                        <Clock size={13} className="text-default-400" />
-                        {formatDate(service?.createdAt)}
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-xs text-default-400 mb-1">
-                        Last Updated
-                      </p>
-                      <div className="flex items-center gap-1.5 text-sm">
-                        <Clock size={13} className="text-default-400" />
-                        {formatDate(service?.updatedAt)}
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
+                ))}
+              </div>
             </CardBody>
           </Card>
 
-          {/* Performance summary (view mode) */}
-          {!isNew && !isEditing && (
-            <Card>
+          {/* Description */}
+          {service.description && (
+            <Card radius="sm">
               <CardHeader className="pb-0">
-                <h2 className="text-lg font-semibold">Performance</h2>
+                <h2 className="text-lg font-semibold">Description</h2>
               </CardHeader>
-              <CardBody className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-default-500">Total deals</span>
-                  <span className="font-semibold">{totalDeals}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-default-500">Deals won</span>
-                  <span className="font-semibold text-success">
-                    {wonDeals.length}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-default-500">Win rate</span>
-                  <span className="font-semibold">
-                    {totalDeals > 0
-                      ? `${Math.round((wonDeals.length / totalDeals) * 100)}%`
-                      : "-"}
-                  </span>
-                </div>
-                <Divider />
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-default-500">Pipeline</span>
-                  <span className="font-semibold text-warning">
-                    {formatCurrency(pipelineValue)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-default-500">Revenue</span>
-                  <span className="font-semibold text-success">
-                    {formatCurrency(totalRevenue)}
-                  </span>
-                </div>
-                <Divider />
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-default-500">Linked leads</span>
-                  <span className="font-semibold">{totalLeads}</span>
-                </div>
+              <CardBody>
+                <p className="text-default-600 leading-relaxed">
+                  {service.description}
+                </p>
               </CardBody>
             </Card>
           )}
 
-          {/* Quick actions (view mode) */}
-          {!isNew && !isEditing && (
-            <Card>
-              <CardHeader className="pb-0">
-                <h2 className="text-lg font-semibold">Quick Actions</h2>
-              </CardHeader>
-              <CardBody className="space-y-2">
-                <Button
-                  fullWidth
-                  variant="flat"
-                  color="primary"
-                  startContent={<Handshake size={16} />}
-                  onPress={() =>
-                    router.push(`/deals/new?serviceId=${serviceId}`)
-                  }
-                >
-                  Create Deal
-                </Button>
-                <Button
-                  fullWidth
-                  variant="flat"
-                  startContent={<Tag size={16} />}
-                  onPress={() =>
-                    router.push(`/leads/new?serviceId=${serviceId}`)
-                  }
-                >
-                  Create Lead
-                </Button>
-              </CardBody>
-            </Card>
-          )}
+          {/* Revenue breakdown */}
+          <Card radius="sm">
+            <CardHeader className="pb-0">
+              <h2 className="text-lg font-semibold">Revenue Breakdown</h2>
+            </CardHeader>
+            <CardBody>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center p-3 rounded-xl bg-default-50">
+                  <div className="flex items-center gap-2">
+                    <DollarSign size={16} className="text-default-400" />
+                    <span className="text-sm">Unit Price</span>
+                  </div>
+                  <span className="font-semibold">
+                    {formatCurrency(service.price)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center p-3 rounded-xl bg-default-50">
+                  <div className="flex items-center gap-2">
+                    <Briefcase size={16} className="text-default-400" />
+                    <span className="text-sm">Deals Closed</span>
+                  </div>
+                  <span className="font-semibold">
+                    × {service.dealsCount ?? 0}
+                  </span>
+                </div>
+                <Divider />
+                <div className="flex justify-between items-center p-3 rounded-xl bg-success-50">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp size={16} className="text-success-600" />
+                    <span className="text-sm font-semibold text-success-700">
+                      Total Revenue
+                    </span>
+                  </div>
+                  <span className="font-bold text-success text-lg">
+                    {formatCurrency(estimatedRevenue)}
+                  </span>
+                </div>
+              </div>
+            </CardBody>
+          </Card>
         </div>
       </div>
+
+      {/* Delete Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        size="sm"
+      >
+        <ModalContent>
+          <ModalHeader>Delete Service</ModalHeader>
+          <ModalBody>
+            <p>
+              Are you sure you want to delete <strong>{service.name}</strong>?
+            </p>
+            <p className="text-sm text-danger mt-2">
+              This will remove the service from all linked leads and deals.
+            </p>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="light" onPress={() => setIsDeleteModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button color="danger" onPress={handleDelete}>
+              Delete Service
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </div>
   );
 }

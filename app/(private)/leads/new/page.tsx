@@ -16,7 +16,7 @@ import { ArrowLeft, Save, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAllUser } from "@/app/hooks/useAllUsers";
-import { useServices } from "@/app/hooks/useServices";
+import { useAllServices } from "@/app/hooks/useAllServices";
 import { useUser } from "@/app/context/UserContext";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -44,7 +44,7 @@ export default function NewLeadPage() {
   const { data: allUsers = [], isLoading: usersLoading } = useAllUser(
     currentUser?.companyId || "",
   );
-  const { data: allServices = [], isLoading: servicesLoading } = useServices(
+  const { data: allServices = [], isLoading: servicesLoading } = useAllServices(
     currentUser?.companyId || "",
   );
 

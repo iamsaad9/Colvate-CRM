@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-export function useServices(companyId: string) {
+export function useAllServices(companyId: string) {
   return useQuery({
     queryKey: ["services", companyId],
     queryFn: async () => {

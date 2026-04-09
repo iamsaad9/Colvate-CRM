@@ -19,6 +19,10 @@ export async function GET(req: Request) {
     const services = await prisma.service.findMany({
       where: { companyId: companyId },
       orderBy: { createdAt: "desc" },
+      include: {
+        deals: true,
+        leads: true,
+      },
     });
 
     console.log("Fetched deals for companyId:", companyId, services);
@@ -42,6 +46,11 @@ export async function POST(req: Request) {
       description: body.description,
       price: new Prisma.Decimal(body.price),
       companyId: body.companyId,
+      isActive: body.isActive,
+    },
+    include: {
+      deals: true,
+      leads: true,
     },
   });
 

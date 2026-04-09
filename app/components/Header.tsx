@@ -46,6 +46,7 @@ import {
   Home,
   Target,
   Handshake,
+  User2,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -264,12 +265,6 @@ export default function Header() {
     }
   };
 
-  const handleQuickAdd = (type: string) => {
-    console.log(`Quick add: ${type}`);
-    // Navigate to respective add page or open modal
-    handleNavigate(`/${type}/new`);
-  };
-
   const handleNotificationClick = (notification: Notification) => {
     console.log("Notification clicked:", notification);
     // Mark as read and navigate
@@ -316,33 +311,53 @@ export default function Header() {
               </DropdownTrigger>
               <DropdownMenu
                 aria-label="Quick add actions"
-                className="flex! flex-row gap-2"
-                onAction={(key) => handleQuickAdd(key as string)}
+                className="flex! flex-row"
               >
                 <DropdownSection title="Navigation">
                   <DropdownItem
                     key="dashboard"
                     as={Link} // Forces Next.js routing logic
                     href="/dashboard"
+                    className="py-2"
                     startContent={<Home size={18} />}
                   >
                     DashBoard
                   </DropdownItem>
                   <DropdownItem
-                    key="leads"
+                    key="allLeads"
                     as={Link} // Forces Next.js routing logic
                     href="/leads"
+                    className="py-2"
                     startContent={<Target size={18} />}
                   >
-                    Leads
+                    All Leads
                   </DropdownItem>
                   <DropdownItem
-                    key="deals"
+                    key="allDeals"
                     as={Link}
                     href="/deals"
+                    className="py-2"
                     startContent={<Handshake size={18} />}
                   >
-                    Deals
+                    All Deals
+                  </DropdownItem>
+                  <DropdownItem
+                    key="allUsers"
+                    as={Link}
+                    href="/users"
+                    className="py-2"
+                    startContent={<Users size={18} />}
+                  >
+                    All Users
+                  </DropdownItem>
+                  <DropdownItem
+                    key="allServices"
+                    as={Link}
+                    href="/company-services"
+                    className="py-2"
+                    startContent={<Package size={18} />}
+                  >
+                    All Services
                   </DropdownItem>
                 </DropdownSection>
 
@@ -390,10 +405,10 @@ export default function Header() {
             <Chip
               size="sm"
               variant="flat"
-              color={getRoleBadgeColor(user.role) as any}
+              color={getRoleBadgeColor(user?.role) as any}
               startContent={<User size={14} />}
             >
-              {user.role}
+              {user?.role}
             </Chip>
           </div>
         </NavbarContent>
@@ -407,7 +422,8 @@ export default function Header() {
             <Input
               classNames={{
                 base: "w-full",
-                inputWrapper: "border border-default bg-background",
+                inputWrapper:
+                  "border border-default bg-background/90 hover:bg-background/90! ",
               }}
               radius="sm"
               placeholder="Search leads, deals, customers, invoices..."
@@ -420,7 +436,7 @@ export default function Header() {
             {/* Inline dropdown for desktop */}
             {searchQuery.length > 0 && (
               <div className="absolute left-0 right-0 mt-2 z-50 max-h-80 overflow-auto bg-default-50 border border-divider rounded-lg shadow-lg p-2">
-                {searchQuery.length < 2 ? (
+                {searchQuery.length < 1 ? (
                   <div className="py-4 text-center text-default-500">
                     <Search size={36} className="mx-auto mb-2 opacity-30" />
                     <p className="text-sm">Start typing to search...</p>
@@ -514,10 +530,7 @@ export default function Header() {
                   Quick Add
                 </Button>
               </DropdownTrigger>
-              <DropdownMenu
-                aria-label="Quick add actions"
-                onAction={(key) => handleQuickAdd(key as string)}
-              >
+              <DropdownMenu aria-label="Quick add actions">
                 <DropdownSection title="Business">
                   <DropdownItem
                     key="lead"
@@ -547,6 +560,15 @@ export default function Header() {
                     href="/company-services/new"
                   >
                     Add Service
+                  </DropdownItem>
+                  <DropdownItem
+                    key="user"
+                    startContent={<User2 size={18} />}
+                    description="Add a new User"
+                    as={Link}
+                    href="/users/new"
+                  >
+                    Add User
                   </DropdownItem>
                   <DropdownItem
                     key="invoice"
